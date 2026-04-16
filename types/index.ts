@@ -3,7 +3,6 @@
 export interface PriceTier {
   minQuantity: number;
   pricePerUnit: number;
-  label?: string;
 }
 
 export interface Variant {
@@ -17,11 +16,9 @@ export interface Product {
   id: number | string;
   brand?: string;
   name: string;
-  category: string;
   description: string;
   priceTiers: PriceTier[];
   imageUrls: string[];
-  tags?: ("Special" | "New" | "Featured")[];
   variants?: Variant[];
   crossProductPromotions?: CrossPromotion[];
 }

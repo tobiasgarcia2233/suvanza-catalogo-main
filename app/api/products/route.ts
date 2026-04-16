@@ -14,8 +14,8 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    if (!body.name || !body.category) {
-      return NextResponse.json({ message: "name and category required" }, { status: 400 });
+    if (!body.name) {
+      return NextResponse.json({ message: "name required" }, { status: 400 });
     }
     const id = await createProduct(body);
     return NextResponse.json({ id }, { status: 201 });

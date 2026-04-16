@@ -14,9 +14,7 @@ export type ProductInput = {
   id?: string;
   brand?: string | null;
   name: string;
-  category: string;
   description?: string;
-  tags?: string[] | null;
   position?: number;
   imageUrls?: string[];
   priceTiers?: PriceTier[];
@@ -50,18 +48,15 @@ async function persistProduct(
   input: ProductInput,
   isUpdate: boolean,
 ): Promise<void> {
-  const tags = input.tags && input.tags.length ? JSON.stringify(input.tags) : null;
   const now = new Date().toISOString();
 
   if (isUpdate) {
     await db.execute({
-      sql: `UPDATE products SET brand=?, name=?, category=?, description=?, tags=?, position=?, updated_at=? WHERE id=?`,
+      sql: `UPDATE products SET brand=?, name=?, description=?, position=?, updated_at=? WHERE id=?`,
       args: [
         input.brand ?? null,
         input.name,
-        input.category,
         input.description ?? null,
-        tags,
         input.position ?? 0,
         now,
         id,
@@ -79,14 +74,12 @@ async function persistProduct(
     );
   } else {
     await db.execute({
-      sql: `INSERT INTO products (id, brand, name, category, description, tags, position) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO products (id, brand, name, description, position) VALUES (?, ?, ?, ?, ?)`,
       args: [
         id,
         input.brand ?? null,
         input.name,
-        input.category,
         input.description ?? null,
-        tags,
         input.position ?? 0,
       ],
     });
@@ -106,8 +99,8 @@ async function persistProduct(
   for (let i = 0; i < topTiers.length; i++) {
     const t = topTiers[i];
     await db.execute({
-      sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, label, position) VALUES (?, NULL, ?, ?, ?, ?)`,
-      args: [id, t.minQuantity, t.pricePerUnit, t.label ?? null, i],
+      sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position) VALUES (?, NULL, ?, ?, ?)`,
+      args: [id, t.minQuantity, t.pricePerUnit, i],
     });
   }
 
@@ -131,8 +124,8 @@ async function persistProduct(
     for (let i = 0; i < tiers.length; i++) {
       const t = tiers[i];
       await db.execute({
-        sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, label, position) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [id, vid, t.minQuantity, t.pricePerUnit, t.label ?? null, i],
+        sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position) VALUES (?, ?, ?, ?, ?)`,
+        args: [id, vid, t.minQuantity, t.pricePerUnit, i],
       });
     }
   }

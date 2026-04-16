@@ -125,8 +125,6 @@ export const useEditCartStore = create<EditCartState>((set, get) => ({
         quantity: orderItem.quantity,
         customTotal: orderItem.finalPrice,
         discountPercentage: orderItem.discountPercentage,
-        category:
-          parentDetails?.category || (baseDetails as Product)?.category || "",
         description:
           parentDetails?.description ||
           (baseDetails as Product)?.description ||

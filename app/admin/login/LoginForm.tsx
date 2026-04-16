@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
@@ -10,6 +10,7 @@ export default function LoginForm({ next }: { next?: string }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,14 +50,25 @@ export default function LoginForm({ next }: { next?: string }) {
       </label>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-gray-700">Contraseña</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete="current-password"
-          className="rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-gray-900"
-        />
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 pr-10 outline-none focus:border-gray-900"
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700"
+          >
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button

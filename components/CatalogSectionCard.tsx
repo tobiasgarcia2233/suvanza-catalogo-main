@@ -27,7 +27,9 @@ export function CatalogSectionCard({ product }: CatalogSectionCardProps) {
         />
       </div>
       <h3 className="font-bold text-text-primary text-lg">{product.name}</h3>
-      <p className="text-text-secondary text-sm">{product.category}</p>
+      {product.brand && (
+        <p className="text-text-secondary text-sm">{product.brand}</p>
+      )}
       <p className="mt-2 font-extrabold text-brand text-xl">
         ${price.toLocaleString("es-CL")}
       </p>

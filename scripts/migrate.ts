@@ -24,6 +24,21 @@ async function applySchema() {
     await db.execute(stmt);
   }
   console.log(`✓ Applied schema (${statements.length} statements)`);
+
+  // Idempotent column drops for schemas migrated from older versions.
+  const legacy: [string, string][] = [
+    ["products", "category"],
+    ["products", "tags"],
+    ["price_tiers", "label"],
+  ];
+  for (const [table, col] of legacy) {
+    try {
+      await db.execute(`ALTER TABLE ${table} DROP COLUMN ${col}`);
+      console.log(`✓ Dropped legacy column ${table}.${col}`);
+    } catch {
+      /* column already absent — ignore */
+    }
+  }
 }
 
 async function wipeData() {
@@ -44,15 +59,13 @@ async function wipeData() {
 
 async function seedProduct(product: Product, index: number) {
   await db.execute({
-    sql: `INSERT INTO products (id, brand, name, category, description, tags, position)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO products (id, brand, name, description, position)
+          VALUES (?, ?, ?, ?, ?)`,
     args: [
       String(product.id),
       product.brand ?? null,
       product.name,
-      product.category,
       product.description ?? null,
-      product.tags ? JSON.stringify(product.tags) : null,
       index,
     ],
   });
@@ -70,9 +83,9 @@ async function seedProduct(product: Product, index: number) {
   for (let i = 0; i < (product.priceTiers ?? []).length; i++) {
     const t: PriceTier = product.priceTiers[i];
     await db.execute({
-      sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, label, position)
-            VALUES (?, NULL, ?, ?, ?, ?)`,
-      args: [String(product.id), t.minQuantity, t.pricePerUnit, t.label ?? null, i],
+      sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position)
+            VALUES (?, NULL, ?, ?, ?)`,
+      args: [String(product.id), t.minQuantity, t.pricePerUnit, i],
     });
   }
 
@@ -94,9 +107,9 @@ async function seedProduct(product: Product, index: number) {
     for (let i = 0; i < (v.priceTiers ?? []).length; i++) {
       const t = v.priceTiers![i];
       await db.execute({
-        sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, label, position)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [String(product.id), v.id, t.minQuantity, t.pricePerUnit, t.label ?? null, i],
+        sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [String(product.id), v.id, t.minQuantity, t.pricePerUnit, i],
       });
     }
   }

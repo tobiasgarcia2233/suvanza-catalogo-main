@@ -7,9 +7,7 @@ CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
   brand TEXT,
   name TEXT NOT NULL,
-  category TEXT NOT NULL,
   description TEXT,
-  tags TEXT,
   position INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -36,7 +34,6 @@ CREATE TABLE IF NOT EXISTS price_tiers (
   variant_id TEXT REFERENCES variants(id) ON DELETE CASCADE,
   min_quantity INTEGER NOT NULL,
   price_per_unit REAL NOT NULL,
-  label TEXT,
   position INTEGER NOT NULL DEFAULT 0
 );
 

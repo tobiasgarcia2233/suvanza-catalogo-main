@@ -19,7 +19,10 @@ export default function PriceTiersEditor({
   function add() {
     onChange([
       ...value,
-      { minQuantity: (value[value.length - 1]?.minQuantity ?? 0) + 1, pricePerUnit: 0 },
+      {
+        minQuantity: (value[value.length - 1]?.minQuantity ?? 0) + 1,
+        pricePerUnit: 0,
+      },
     ]);
   }
 
@@ -44,22 +47,16 @@ export default function PriceTiersEditor({
               min={0}
               step="0.01"
               value={tier.pricePerUnit}
-              onChange={(e) => update(i, { pricePerUnit: Number(e.target.value) })}
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
-            />
-          </label>
-          <label className="flex flex-col text-xs flex-1">
-            <span className="text-gray-600">Etiqueta (opcional)</span>
-            <input
-              value={tier.label ?? ""}
-              onChange={(e) => update(i, { label: e.target.value })}
+              onChange={(e) =>
+                update(i, { pricePerUnit: Number(e.target.value) })
+              }
               className="rounded border border-gray-300 px-2 py-1 text-sm"
             />
           </label>
           <button
             type="button"
             onClick={() => remove(i)}
-            className="p-2 text-red-600 hover:bg-red-50 rounded"
+            className="p-2 text-red-600 hover:bg-red-50 rounded self-end mb-0.5"
           >
             <Trash2 size={14} />
           </button>

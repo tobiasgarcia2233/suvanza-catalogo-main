@@ -9,13 +9,9 @@ function readProduct(row: Row): Product {
     id: row.id as string,
     brand: (row.brand as string | null) ?? undefined,
     name: row.name as string,
-    category: row.category as string,
     description: (row.description as string | null) ?? "",
     priceTiers: [],
     imageUrls: [],
-    tags: row.tags
-      ? (JSON.parse(row.tags as string) as Product["tags"])
-      : undefined,
     variants: [],
     crossProductPromotions: [],
   };
@@ -103,7 +99,6 @@ export async function getAllProducts(): Promise<Product[]> {
     const tier: PriceTier = {
       minQuantity: Number(row.min_quantity),
       pricePerUnit: Number(row.price_per_unit),
-      label: (row.label as string | null) ?? undefined,
     };
     if (row.variant_id) {
       const v = p.variants!.find((x) => x.id === row.variant_id);
@@ -182,7 +177,6 @@ export async function getProduct(id: string): Promise<Product | null> {
     const tier: PriceTier = {
       minQuantity: Number(row.min_quantity),
       pricePerUnit: Number(row.price_per_unit),
-      label: (row.label as string | null) ?? undefined,
     };
     if (row.variant_id) {
       product.variants!

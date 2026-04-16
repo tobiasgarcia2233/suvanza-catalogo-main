@@ -5,15 +5,19 @@ import { useRouter } from "next/navigation";
 import type { Product, Variant, CrossPromotion } from "@/types";
 import ImageUpload from "./ImageUpload";
 import PriceTiersEditor from "./PriceTiersEditor";
+import SearchBox from "./SearchBox";
 import { Plus, Trash2, Loader2 } from "lucide-react";
+import { useMemo } from "react";
+
+function emptyVariant(): Variant {
+  return { id: "", name: "", imageUrls: [], priceTiers: [] };
+}
 
 type FormState = {
   id: string;
   brand: string;
   name: string;
-  category: string;
   description: string;
-  tags: string;
   imageUrls: string[];
   priceTiers: Product["priceTiers"];
   variants: Variant[];
@@ -21,22 +25,21 @@ type FormState = {
 };
 
 function initial(product?: Product): FormState {
+  const variants =
+    product?.variants?.map((v) => ({
+      id: v.id,
+      name: v.name,
+      imageUrls: v.imageUrls ?? [],
+      priceTiers: v.priceTiers ?? [],
+    })) ?? [];
   return {
     id: product ? String(product.id) : "",
     brand: product?.brand ?? "",
     name: product?.name ?? "",
-    category: product?.category ?? "",
     description: product?.description ?? "",
-    tags: (product?.tags ?? []).join(", "),
     imageUrls: product?.imageUrls ?? [],
     priceTiers: product?.priceTiers ?? [],
-    variants:
-      product?.variants?.map((v) => ({
-        id: v.id,
-        name: v.name,
-        imageUrls: v.imageUrls ?? [],
-        priceTiers: v.priceTiers ?? [],
-      })) ?? [],
+    variants: variants.length > 0 ? variants : [emptyVariant()],
     promotionIds: (product?.crossProductPromotions ?? []).map((p) => p.id),
   };
 }
@@ -53,6 +56,18 @@ export default function ProductForm({
   const [state, setState] = useState<FormState>(initial(product));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promoQuery, setPromoQuery] = useState("");
+
+  const filteredPromotions = useMemo(() => {
+    const q = promoQuery.trim().toLowerCase();
+    if (!q) return promotions;
+    return promotions.filter((p) => {
+      const hay = [p.title, ...p.items.map((it) => it.name)]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [promoQuery, promotions]);
 
   function setField<K extends keyof FormState>(key: K, val: FormState[K]) {
     setState((s) => ({ ...s, [key]: val }));
@@ -65,19 +80,13 @@ export default function ProductForm({
     }));
   }
   function addVariant() {
-    setState((s) => ({
-      ...s,
-      variants: [
-        ...s.variants,
-        { id: "", name: "", imageUrls: [], priceTiers: [] },
-      ],
-    }));
+    setState((s) => ({ ...s, variants: [...s.variants, emptyVariant()] }));
   }
   function removeVariant(i: number) {
-    setState((s) => ({
-      ...s,
-      variants: s.variants.filter((_, idx) => idx !== i),
-    }));
+    setState((s) => {
+      if (s.variants.length <= 1) return s;
+      return { ...s, variants: s.variants.filter((_, idx) => idx !== i) };
+    });
   }
   function togglePromotion(id: string) {
     setState((s) => ({
@@ -97,12 +106,7 @@ export default function ProductForm({
         id: state.id || undefined,
         brand: state.brand.trim() || null,
         name: state.name.trim(),
-        category: state.category.trim(),
         description: state.description.trim(),
-        tags: state.tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
         imageUrls: state.imageUrls,
         priceTiers: state.priceTiers,
         variants: state.variants,
@@ -167,23 +171,6 @@ export default function ProductForm({
               className="rounded border border-gray-300 px-3 py-2"
             />
           </label>
-          <label className="flex flex-col text-sm">
-            <span className="text-gray-600">Categoría</span>
-            <input
-              required
-              value={state.category}
-              onChange={(e) => setField("category", e.target.value)}
-              className="rounded border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="text-gray-600">Tags (separadas por coma: Featured, New, Special)</span>
-            <input
-              value={state.tags}
-              onChange={(e) => setField("tags", e.target.value)}
-              className="rounded border border-gray-300 px-3 py-2"
-            />
-          </label>
         </div>
         <label className="flex flex-col text-sm">
           <span className="text-gray-600">Descripción</span>
@@ -197,11 +184,10 @@ export default function ProductForm({
       </section>
 
       <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
-        <h2 className="font-semibold">Imágenes (nivel producto)</h2>
+        <h2 className="font-semibold">Imagen del catálogo</h2>
         <p className="text-xs text-gray-500">
-          La primera es la imagen que se muestra en el catálogo. Si el producto
-          no tiene variantes, usá estas imágenes; si tiene, sólo se usan como
-          fallback dentro de la ficha del producto.
+          La primera imagen es la que se muestra en la grilla del catálogo.
+          Subí varias si querés tener opciones para reordenar.
         </p>
         <ImageUpload
           value={state.imageUrls}
@@ -210,19 +196,14 @@ export default function ProductForm({
         />
       </section>
 
-      {state.variants.length === 0 && (
-        <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
-          <h2 className="font-semibold">Precios (sin variantes)</h2>
-          <PriceTiersEditor
-            value={state.priceTiers}
-            onChange={(tiers) => setField("priceTiers", tiers)}
-          />
-        </section>
-      )}
-
       <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Variantes</h2>
+          <div>
+            <h2 className="font-semibold">Variantes</h2>
+            <p className="text-xs text-gray-500">
+              Cada variante tiene su propio nombre, precios e imágenes de ficha.
+            </p>
+          </div>
           <button
             type="button"
             onClick={addVariant}
@@ -231,61 +212,68 @@ export default function ProductForm({
             <Plus size={14} /> Agregar variante
           </button>
         </div>
-        {state.variants.length === 0 && (
-          <p className="text-sm text-gray-500">
-            Sin variantes — el producto usa los precios e imágenes del bloque
-            anterior.
-          </p>
-        )}
-        {state.variants.map((v, i) => (
-          <div
-            key={i}
-            className="border border-gray-200 rounded-md p-4 flex flex-col gap-3"
-          >
-            <div className="flex items-start gap-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
-                <label className="flex flex-col text-sm">
-                  <span className="text-gray-600">Nombre de la variante</span>
-                  <input
-                    value={v.name}
-                    onChange={(e) => updateVariant(i, { name: e.target.value })}
-                    className="rounded border border-gray-300 px-3 py-2"
-                  />
-                </label>
-                <label className="flex flex-col text-sm">
-                  <span className="text-gray-600">ID (opcional; se genera si se deja vacío)</span>
-                  <input
-                    value={v.id}
-                    onChange={(e) => updateVariant(i, { id: e.target.value })}
-                    className="rounded border border-gray-300 px-3 py-2"
-                  />
-                </label>
+        {state.variants.map((v, i) => {
+          const canRemove = state.variants.length > 1;
+          return (
+            <div
+              key={i}
+              className="border border-gray-200 rounded-md p-4 flex flex-col gap-3"
+            >
+              <div className="flex items-start gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+                  <label className="flex flex-col text-sm">
+                    <span className="text-gray-600">Nombre de la variante</span>
+                    <input
+                      value={v.name}
+                      onChange={(e) =>
+                        updateVariant(i, { name: e.target.value })
+                      }
+                      className="rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="flex flex-col text-sm">
+                    <span className="text-gray-600">
+                      ID (opcional; se genera si se deja vacío)
+                    </span>
+                    <input
+                      value={v.id}
+                      onChange={(e) => updateVariant(i, { id: e.target.value })}
+                      className="rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeVariant(i)}
+                  disabled={!canRemove}
+                  title={
+                    canRemove
+                      ? "Eliminar variante"
+                      : "Tiene que haber al menos una variante"
+                  }
+                  className="p-2 text-red-600 hover:bg-red-50 rounded disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => removeVariant(i)}
-                className="p-2 text-red-600 hover:bg-red-50 rounded"
-              >
-                <Trash2 size={16} />
-              </button>
+              <div>
+                <p className="text-xs text-gray-600 mb-2">Imágenes</p>
+                <ImageUpload
+                  value={v.imageUrls ?? []}
+                  onChange={(urls) => updateVariant(i, { imageUrls: urls })}
+                  folder={`suvanza/products/${state.id || "new"}/${v.id || `var-${i + 1}`}`}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-2">Precios</p>
+                <PriceTiersEditor
+                  value={v.priceTiers ?? []}
+                  onChange={(tiers) => updateVariant(i, { priceTiers: tiers })}
+                />
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-600 mb-2">Imágenes</p>
-              <ImageUpload
-                value={v.imageUrls ?? []}
-                onChange={(urls) => updateVariant(i, { imageUrls: urls })}
-                folder={`suvanza/products/${state.id || "new"}/${v.id || `var-${i + 1}`}`}
-              />
-            </div>
-            <div>
-              <p className="text-xs text-gray-600 mb-2">Precios</p>
-              <PriceTiersEditor
-                value={v.priceTiers ?? []}
-                onChange={(tiers) => updateVariant(i, { priceTiers: tiers })}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-3">
@@ -298,21 +286,37 @@ export default function ProductForm({
             Todavía no hay promociones. Creá promociones en /admin/promotions.
           </p>
         ) : (
-          <div className="flex flex-col gap-1">
-            {promotions.map((p) => (
-              <label key={p.id} className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={state.promotionIds.includes(p.id)}
-                  onChange={() => togglePromotion(p.id)}
-                />
-                <span>{p.title}</span>
-                <span className="text-xs text-gray-500">
-                  (${p.totalPrice.toLocaleString("es-AR")})
-                </span>
-              </label>
-            ))}
-          </div>
+          <>
+            <SearchBox
+              value={promoQuery}
+              onChange={setPromoQuery}
+              placeholder="Buscar promoción por título o producto..."
+              className="max-w-md"
+            />
+            <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+              {filteredPromotions.map((p) => (
+                <label
+                  key={p.id}
+                  className="inline-flex items-center gap-2 text-sm py-1"
+                >
+                  <input
+                    type="checkbox"
+                    checked={state.promotionIds.includes(p.id)}
+                    onChange={() => togglePromotion(p.id)}
+                  />
+                  <span>{p.title}</span>
+                  <span className="text-xs text-gray-500">
+                    (${p.totalPrice.toLocaleString("es-AR")})
+                  </span>
+                </label>
+              ))}
+              {filteredPromotions.length === 0 && (
+                <p className="text-xs text-gray-500 py-2">
+                  Sin coincidencias.
+                </p>
+              )}
+            </div>
+          </>
         )}
       </section>
 
