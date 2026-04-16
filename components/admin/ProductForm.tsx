@@ -199,8 +199,9 @@ export default function ProductForm({
       <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
         <h2 className="font-semibold">Imágenes (nivel producto)</h2>
         <p className="text-xs text-gray-500">
-          Si el producto no tiene variantes, usá estas imágenes. Si tiene, estas
-          imágenes sólo se muestran como fallback.
+          La primera es la imagen que se muestra en el catálogo. Si el producto
+          no tiene variantes, usá estas imágenes; si tiene, sólo se usan como
+          fallback dentro de la ficha del producto.
         </p>
         <ImageUpload
           value={state.imageUrls}
