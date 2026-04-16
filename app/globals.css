@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #442711; /* Your main blue */
+  --color-brand-hover: #1b120b;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --color-background: #f9fafb;
+  --color-surface: #ffffff;
+  --color-special: #ff3b30; /* For the "Special" tag */
+  --color-discount: #e53e3e; /* For the discount badge */
+  --color-success: #10b981;
+  --color-update: #191919;
+
+  --font-sans: "Inter", sans-serif; /* Example font, you can change this */
+
+  --border-radius-card: 0.75rem; /* 12px */
+  --border-radius-button: 0.5rem; /* 8px */
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary;
+    font-family: var(--font-sans);
+  }
+}
+
+@layer utilities {
+  @keyframes flash-success {
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(1.1);
+    }
+    10%,
+    90% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-flash-success {
+    animation: flash-success 1.2s ease-in-out forwards;
+  }
+
+  @keyframes flash-update {
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(1.1);
+    }
+    10%,
+    90% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .animate-flash-update {
+    animation: flash-update 1.2s ease-in-out forwards;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary;
+    font-family: var(--font-sans);
+  }
+
+  /* NEW: Class to prevent body scrolling when a modal is open */
+  body.no-scroll {
+    overflow: hidden;
+  }
+}
+
+.media-carousel {
+  /* This sets the color of the arrow icons */
+  --swiper-navigation-color: #ffffff;
+  /* This sets the size of the navigation buttons */
+  --swiper-navigation-size: 2rem; /* Reduced from default for a sleeker look */
+}
+
+/* By scoping to .media-carousel, we ensure these styles only apply to our gallery */
+.media-carousel .swiper-button-next,
+.media-carousel .swiper-button-prev {
+  /* Override default size and background */
+  width: 4rem;
+  height: 4rem;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.media-carousel .swiper-button-next:hover,
+.media-carousel .swiper-button-prev:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Adjust the position of the arrows to be further from the edge */
+.media-carousel .swiper-button-prev {
+  left: 1rem;
+}
+
+.media-carousel .swiper-button-next {
+  right: 1rem;
+}
+
+.swiper-slide.swiper-slide-active {
+  width: 100% !important;
+}
+
+.swiper-slide {
+  display: flex !important;
+}
