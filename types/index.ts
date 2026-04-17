@@ -37,6 +37,23 @@ export interface CartItem extends Product {
   manualPricePerUnit?: number | null;
 }
 
+export type PaymentMethod =
+  | "Efectivo pesos"
+  | "Efectivo dólares"
+  | "Transferencia Macro"
+  | "Transferencia Santander"
+  | "Mercado Pago"
+  | "Tarjeta de crédito NAVE";
+
+export const PAYMENT_METHODS: PaymentMethod[] = [
+  "Efectivo pesos",
+  "Efectivo dólares",
+  "Transferencia Macro",
+  "Transferencia Santander",
+  "Mercado Pago",
+  "Tarjeta de crédito NAVE",
+];
+
 export interface Order {
   id: string; // uuid
   created_at: string;
@@ -65,6 +82,8 @@ export interface Order {
   };
   seller_name: string;
   autoApplyPromos?: boolean;
+  notes?: string | null;
+  payment_method?: PaymentMethod | string | null;
 }
 
 export interface CrossPromotion {

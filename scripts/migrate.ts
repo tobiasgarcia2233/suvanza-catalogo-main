@@ -39,6 +39,20 @@ async function applySchema() {
       /* column already absent — ignore */
     }
   }
+
+  // Idempotent new columns on orders (Jun 2026+)
+  const added: [string, string, string][] = [
+    ["orders", "notes", "TEXT"],
+    ["orders", "payment_method", "TEXT"],
+  ];
+  for (const [table, col, type] of added) {
+    try {
+      await db.execute(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+      console.log(`✓ Added column ${table}.${col}`);
+    } catch {
+      /* column already present — ignore */
+    }
+  }
 }
 
 async function wipeData() {

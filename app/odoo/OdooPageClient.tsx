@@ -7,9 +7,11 @@ import type { Order } from "@/types";
 import {
   ArrowLeft,
   Check,
+  CreditCard,
   Loader2,
   Printer,
   Send,
+  StickyNote,
   Undo2,
 } from "lucide-react";
 
@@ -282,6 +284,33 @@ function OrderCard({
             </div>
           </div>
         </div>
+
+        {(order.payment_method || order.notes) && (
+          <div className="mb-3 flex flex-col gap-2">
+            {order.payment_method && (
+              <div className="inline-flex items-start gap-2 rounded-md bg-indigo-50 border border-indigo-100 px-3 py-1.5 text-sm text-indigo-900">
+                <CreditCard size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  <span className="text-[11px] uppercase tracking-wide text-indigo-700 mr-1">
+                    Pago:
+                  </span>
+                  <span className="font-medium">{order.payment_method}</span>
+                </span>
+              </div>
+            )}
+            {order.notes && (
+              <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-100 px-3 py-1.5 text-sm text-amber-900">
+                <StickyNote size={14} className="mt-0.5 shrink-0" />
+                <span className="whitespace-pre-wrap">
+                  <span className="text-[11px] uppercase tracking-wide text-amber-700 mr-1">
+                    Nota:
+                  </span>
+                  {order.notes}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         <table className="w-full text-sm">
           <thead>

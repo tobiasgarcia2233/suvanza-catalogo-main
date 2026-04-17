@@ -60,6 +60,13 @@ export async function PATCH(
     if (body.transferred_to_odoo !== undefined) {
       patch.transferred_to_odoo = !!body.transferred_to_odoo;
     }
+    if (body.notes !== undefined) {
+      patch.notes = body.notes === null ? null : String(body.notes);
+    }
+    if (body.payment_method !== undefined) {
+      patch.payment_method =
+        body.payment_method === null ? null : String(body.payment_method);
+    }
 
     await updateOrder(orderId, patch);
     return NextResponse.json({ message: "Order updated" });

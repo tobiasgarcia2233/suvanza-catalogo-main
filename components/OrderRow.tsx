@@ -6,13 +6,17 @@ import type { Order } from "@/types";
 import {
   Check,
   CheckCircle,
+  CreditCard,
   Loader2,
   Pencil,
   Printer,
+  StickyNote,
   Trash2,
 } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useUIStore } from "@/store/uiStore";
+import NotesModal from "./NotesModal";
+import PaymentMethodModal from "./PaymentMethodModal";
 
 interface OrderRowProps {
   order: Order;
@@ -25,11 +29,15 @@ export function OrderRow({ order }: OrderRowProps) {
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState<Busy>(null);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const { loadOrderForEdit } = useCartStore();
   const { openConfirmationModal, openCart } = useUIStore();
 
   const isCompleted = order.status === "COMPLETED";
   const anyBusy = busy !== null || isPending;
+  const hasNotes = !!(order.notes && order.notes.trim());
+  const hasPayment = !!order.payment_method;
 
   const formattedDate = new Date(order.created_at).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -124,6 +132,11 @@ export function OrderRow({ order }: OrderRowProps) {
           <p className="text-text-secondary text-sm">
             DNI: {order.buyer_details.dni}
           </p>
+          {hasPayment && (
+            <p className="text-text-secondary text-xs mt-0.5">
+              💳 {order.payment_method}
+            </p>
+          )}
         </div>
         <div>
           <p>{order.seller_name}</p>
@@ -150,6 +163,38 @@ export function OrderRow({ order }: OrderRowProps) {
         </div>
 
         <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setNotesOpen(true)}
+            className={`p-2 rounded-md transition disabled:opacity-50 ${
+              hasNotes
+                ? "bg-amber-500 hover:bg-amber-600 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+            }`}
+            aria-label="Nota"
+            title={hasNotes ? "Ver / editar nota" : "Agregar nota"}
+            disabled={anyBusy}
+          >
+            <StickyNote size={18} />
+          </button>
+
+          <button
+            onClick={() => setPaymentOpen(true)}
+            className={`p-2 rounded-md transition disabled:opacity-50 ${
+              hasPayment
+                ? "bg-indigo-500 hover:bg-indigo-600 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+            }`}
+            aria-label="Medio de pago"
+            title={
+              hasPayment
+                ? `Medio de pago: ${order.payment_method}`
+                : "Elegir medio de pago"
+            }
+            disabled={anyBusy}
+          >
+            <CreditCard size={18} />
+          </button>
+
           <button
             onClick={openPrintView}
             className="bg-gray-100 hover:bg-gray-200 p-2 rounded-md text-gray-600 transition disabled:opacity-50"
@@ -191,6 +236,23 @@ export function OrderRow({ order }: OrderRowProps) {
           </button>
         </div>
       </div>
+
+      <NotesModal
+        open={notesOpen}
+        onClose={() => setNotesOpen(false)}
+        orderId={order.id}
+        initialNotes={order.notes ?? ""}
+        buyerName={order.buyer_details.name}
+        onSaved={refresh}
+      />
+      <PaymentMethodModal
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        orderId={order.id}
+        initialMethod={(order.payment_method as string | null) ?? null}
+        buyerName={order.buyer_details.name}
+        onSaved={refresh}
+      />
     </>
   );
 }

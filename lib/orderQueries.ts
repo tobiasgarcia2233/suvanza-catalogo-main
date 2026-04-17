@@ -17,6 +17,8 @@ type OrderRow = {
   auto_apply_promos: number;
   transferred_to_odoo: number;
   transferred_at: string | null;
+  notes: string | null;
+  payment_method: string | null;
 };
 
 function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; transferred_at?: string | null } {
@@ -34,6 +36,8 @@ function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; trans
     autoApplyPromos: !!r.auto_apply_promos,
     transferred_to_odoo: !!r.transferred_to_odoo,
     transferred_at: r.transferred_at,
+    notes: r.notes,
+    payment_method: r.payment_method,
   };
 }
 
@@ -153,6 +157,14 @@ export async function updateOrder(
     args.push(patch.transferred_to_odoo ? 1 : 0);
     updates.push("transferred_at = ?");
     args.push(patch.transferred_to_odoo ? new Date().toISOString() : null);
+  }
+  if (patch.notes !== undefined) {
+    updates.push("notes = ?");
+    args.push(patch.notes === null ? null : String(patch.notes));
+  }
+  if (patch.payment_method !== undefined) {
+    updates.push("payment_method = ?");
+    args.push(patch.payment_method === null ? null : String(patch.payment_method));
   }
 
   if (updates.length === 0) return;

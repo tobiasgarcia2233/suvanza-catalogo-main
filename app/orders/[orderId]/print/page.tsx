@@ -59,8 +59,25 @@ export default async function OrderPrintPage({
               {order.status === "COMPLETED" ? "Pagada" : "Pendiente"}
             </span>
           </p>
+          {order.payment_method && (
+            <p className="text-sm mt-1">
+              Medio de pago:{" "}
+              <span className="font-semibold">{order.payment_method}</span>
+            </p>
+          )}
         </div>
       </section>
+
+      {order.notes && (
+        <section className="mb-6">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500 mb-1">
+            Nota
+          </h2>
+          <p className="text-sm whitespace-pre-wrap border border-gray-200 rounded-md p-3 bg-gray-50">
+            {order.notes}
+          </p>
+        </section>
+      )}
 
       <section className="mb-6">
         <h2 className="text-sm uppercase tracking-wide text-gray-500 mb-2">
