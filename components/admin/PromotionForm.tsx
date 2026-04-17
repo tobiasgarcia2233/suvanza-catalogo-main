@@ -157,7 +157,9 @@ export default function PromotionForm({
         linkedProductIds: state.linkedProductIds,
       };
       const res = await fetch(
-        isEdit ? `/api/promotions/${promo!.id}` : "/api/promotions",
+        isEdit
+          ? `/api/promotions/${encodeURIComponent(promo!.id)}`
+          : "/api/promotions",
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -182,7 +184,10 @@ export default function PromotionForm({
     if (!confirm(`¿Eliminar la promoción "${promo.title}"?`)) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/promotions/${promo.id}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/promotions/${encodeURIComponent(promo.id)}`,
+        { method: "DELETE" },
+      );
       if (!res.ok) throw new Error("No se pudo eliminar");
       router.push("/admin/promotions");
       router.refresh();

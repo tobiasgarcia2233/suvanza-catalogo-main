@@ -113,7 +113,9 @@ export default function ProductForm({
         promotionIds: state.promotionIds,
       };
       const res = await fetch(
-        isEdit ? `/api/products/${product!.id}` : "/api/products",
+        isEdit
+          ? `/api/products/${encodeURIComponent(String(product!.id))}`
+          : "/api/products",
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -139,7 +141,10 @@ export default function ProductForm({
       return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/products/${encodeURIComponent(String(product.id))}`,
+        { method: "DELETE" },
+      );
       if (!res.ok) throw new Error("No se pudo eliminar");
       router.push("/admin/products");
       router.refresh();
