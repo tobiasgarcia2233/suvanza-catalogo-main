@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS orders (
   transferred_to_odoo INTEGER NOT NULL DEFAULT 0,
   transferred_at TEXT,
   notes TEXT,
-  payment_method TEXT
+  payment_method TEXT,
+  payments TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);

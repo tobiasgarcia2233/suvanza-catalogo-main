@@ -59,14 +59,28 @@ export default async function OrderPrintPage({
               {order.status === "COMPLETED" ? "Pagada" : "Pendiente"}
             </span>
           </p>
-          {order.payment_method && (
-            <p className="text-sm mt-1">
-              Medio de pago:{" "}
-              <span className="font-semibold">{order.payment_method}</span>
-            </p>
-          )}
         </div>
       </section>
+
+      {order.payments && order.payments.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500 mb-1">
+            Medios de pago
+          </h2>
+          <table className="w-full text-sm border-collapse">
+            <tbody>
+              {order.payments.map((p, i) => (
+                <tr key={i} className="border-b last:border-0">
+                  <td className="py-1.5">{p.method}</td>
+                  <td className="py-1.5 text-right font-medium">
+                    ${p.amount.toLocaleString("es-AR")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {order.notes && (
         <section className="mb-6">

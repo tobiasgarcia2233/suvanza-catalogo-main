@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Order } from "@/types";
 import { OrderRow } from "./OrderRow";
 import { Search, X } from "lucide-react";
+import { isRefreshPaused } from "@/store/refreshGuardStore";
 
 interface SearchableOrderListProps {
   initialOrders: Order[];
@@ -21,6 +22,7 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
 
   useEffect(() => {
     const interval = setInterval(() => {
+      if (isRefreshPaused()) return;
       if (!searchParams.get("startDate") && !searchParams.get("endDate")) {
         router.refresh();
       }

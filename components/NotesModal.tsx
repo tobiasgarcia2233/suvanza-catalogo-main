@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
+import { usePauseRefresh } from "@/store/refreshGuardStore";
 
 export default function NotesModal({
   open,
@@ -22,12 +23,17 @@ export default function NotesModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  usePauseRefresh(open);
+
   useEffect(() => {
     if (open) {
       setValue(initialNotes);
       setError(null);
     }
-  }, [open, initialNotes]);
+    // Only re-seed when the modal transitions to open — ignore prop changes
+    // from background router.refresh() so user input is preserved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
@@ -52,7 +58,7 @@ export default function NotesModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
       <div

@@ -285,17 +285,25 @@ function OrderCard({
           </div>
         </div>
 
-        {(order.payment_method || order.notes) && (
+        {((order.payments && order.payments.length > 0) || order.notes) && (
           <div className="mb-3 flex flex-col gap-2">
-            {order.payment_method && (
-              <div className="inline-flex items-start gap-2 rounded-md bg-indigo-50 border border-indigo-100 px-3 py-1.5 text-sm text-indigo-900">
+            {order.payments && order.payments.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md bg-indigo-50 border border-indigo-100 px-3 py-1.5 text-sm text-indigo-900">
                 <CreditCard size={14} className="mt-0.5 shrink-0" />
-                <span>
+                <div>
                   <span className="text-[11px] uppercase tracking-wide text-indigo-700 mr-1">
                     Pago:
                   </span>
-                  <span className="font-medium">{order.payment_method}</span>
-                </span>
+                  {order.payments.map((p, i) => (
+                    <span key={i}>
+                      {i > 0 && " · "}
+                      <span className="font-medium">{p.method}</span>{" "}
+                      <span className="text-indigo-700">
+                        (${p.amount.toLocaleString("es-AR")})
+                      </span>
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
             {order.notes && (

@@ -54,6 +54,11 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
   "Tarjeta de crédito NAVE",
 ];
 
+export interface OrderPayment {
+  method: PaymentMethod | string;
+  amount: number;
+}
+
 export interface Order {
   id: string; // uuid
   created_at: string;
@@ -84,6 +89,7 @@ export interface Order {
   autoApplyPromos?: boolean;
   notes?: string | null;
   payment_method?: PaymentMethod | string | null;
+  payments?: OrderPayment[] | null;
 }
 
 export interface CrossPromotion {

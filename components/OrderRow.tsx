@@ -37,7 +37,13 @@ export function OrderRow({ order }: OrderRowProps) {
   const isCompleted = order.status === "COMPLETED";
   const anyBusy = busy !== null || isPending;
   const hasNotes = !!(order.notes && order.notes.trim());
-  const hasPayment = !!order.payment_method;
+  const paymentsList = order.payments ?? [];
+  const hasPayment = paymentsList.length > 0;
+  const paymentsLabel = hasPayment
+    ? paymentsList.length === 1
+      ? paymentsList[0].method
+      : `${paymentsList.length} medios`
+    : null;
 
   const formattedDate = new Date(order.created_at).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -134,7 +140,7 @@ export function OrderRow({ order }: OrderRowProps) {
           </p>
           {hasPayment && (
             <p className="text-text-secondary text-xs mt-0.5">
-              💳 {order.payment_method}
+              💳 {paymentsLabel}
             </p>
           )}
         </div>
@@ -184,11 +190,16 @@ export function OrderRow({ order }: OrderRowProps) {
                 ? "bg-indigo-500 hover:bg-indigo-600 text-white"
                 : "bg-gray-100 hover:bg-gray-200 text-gray-600"
             }`}
-            aria-label="Medio de pago"
+            aria-label="Medios de pago"
             title={
               hasPayment
-                ? `Medio de pago: ${order.payment_method}`
-                : "Elegir medio de pago"
+                ? paymentsList
+                    .map(
+                      (p) =>
+                        `${p.method}: $${p.amount.toLocaleString("es-AR")}`,
+                    )
+                    .join("\n")
+                : "Cargar medios de pago"
             }
             disabled={anyBusy}
           >
@@ -249,7 +260,8 @@ export function OrderRow({ order }: OrderRowProps) {
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         orderId={order.id}
-        initialMethod={(order.payment_method as string | null) ?? null}
+        orderTotal={order.total}
+        initialPayments={order.payments ?? null}
         buyerName={order.buyer_details.name}
         onSaved={refresh}
       />

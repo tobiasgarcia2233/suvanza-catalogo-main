@@ -44,6 +44,7 @@ async function applySchema() {
   const added: [string, string, string][] = [
     ["orders", "notes", "TEXT"],
     ["orders", "payment_method", "TEXT"],
+    ["orders", "payments", "TEXT"],
   ];
   for (const [table, col, type] of added) {
     try {

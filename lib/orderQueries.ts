@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import type { Order } from "@/types";
+import type { Order, OrderPayment } from "@/types";
 
 const isNumeric = (s: string) => /^\d+$/.test(s);
 
@@ -19,10 +19,25 @@ type OrderRow = {
   transferred_at: string | null;
   notes: string | null;
   payment_method: string | null;
+  payments: string | null;
 };
 
 function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; transferred_at?: string | null } {
   const date = r.order_date ? JSON.parse(r.order_date) : null;
+  let payments: OrderPayment[] | null = null;
+  if (r.payments) {
+    try {
+      const parsed = JSON.parse(r.payments) as OrderPayment[];
+      if (Array.isArray(parsed)) payments = parsed;
+    } catch {
+      /* malformed — fall through */
+    }
+  }
+  // Legacy: synthesize a single-entry payments array from payment_method so the
+  // UI can treat everything uniformly.
+  if (!payments && r.payment_method) {
+    payments = [{ method: r.payment_method, amount: Number(r.total) }];
+  }
   return {
     id: r.id,
     created_at: r.created_at,
@@ -38,6 +53,7 @@ function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; trans
     transferred_at: r.transferred_at,
     notes: r.notes,
     payment_method: r.payment_method,
+    payments,
   };
 }
 
@@ -165,6 +181,17 @@ export async function updateOrder(
   if (patch.payment_method !== undefined) {
     updates.push("payment_method = ?");
     args.push(patch.payment_method === null ? null : String(patch.payment_method));
+  }
+  if (patch.payments !== undefined) {
+    updates.push("payments = ?");
+    if (patch.payments === null) {
+      args.push(null);
+    } else {
+      args.push(JSON.stringify(patch.payments));
+    }
+    // Clear the legacy single-method field so UIs don't double-count.
+    updates.push("payment_method = ?");
+    args.push(null);
   }
 
   if (updates.length === 0) return;

@@ -67,6 +67,27 @@ export async function PATCH(
       patch.payment_method =
         body.payment_method === null ? null : String(body.payment_method);
     }
+    if (body.payments !== undefined) {
+      if (body.payments === null) {
+        patch.payments = null;
+      } else if (Array.isArray(body.payments)) {
+        const cleaned: { method: string; amount: number }[] = [];
+        for (const raw of body.payments) {
+          if (
+            raw &&
+            typeof raw === "object" &&
+            typeof (raw as { method?: unknown }).method === "string" &&
+            Number.isFinite(Number((raw as { amount?: unknown }).amount))
+          ) {
+            cleaned.push({
+              method: (raw as { method: string }).method,
+              amount: Number((raw as { amount: unknown }).amount),
+            });
+          }
+        }
+        patch.payments = cleaned;
+      }
+    }
 
     await updateOrder(orderId, patch);
     return NextResponse.json({ message: "Order updated" });
