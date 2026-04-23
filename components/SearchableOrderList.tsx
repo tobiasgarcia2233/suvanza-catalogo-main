@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useMemo, useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Order } from "@/types";
 import { OrderRow } from "./OrderRow";
-import { Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { isRefreshPaused } from "@/store/refreshGuardStore";
 
 interface SearchableOrderListProps {
@@ -19,6 +19,7 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [startDate, setStartDate] = useState(searchParams.get("startDate") || "");
   const [endDate, setEndDate] = useState(searchParams.get("endDate") || "");
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -50,8 +51,89 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
     startTransition(() => router.push("/orders"));
   };
 
+  const totals = useMemo(() => {
+    let grand = 0;
+    let paid = 0;
+    let pending = 0;
+    for (const o of initialOrders) {
+      grand += o.total;
+      if (o.status === "COMPLETED") paid += o.total;
+      else pending += o.total;
+    }
+    return { grand, paid, pending };
+  }, [initialOrders]);
+
+  const rangeLabel = (() => {
+    if (startDate && endDate) {
+      return `del ${startDate} al ${endDate}`;
+    }
+    if (searchParams.get("startDate") && searchParams.get("endDate")) {
+      return `del ${searchParams.get("startDate")} al ${searchParams.get("endDate")}`;
+    }
+    return "últimas 24 hs";
+  })();
+
   return (
     <div>
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setSummaryOpen((v) => !v)}
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text-primary hover:bg-gray-50"
+        >
+          <ChevronDown
+            size={14}
+            className={`transition-transform ${summaryOpen ? "rotate-180" : ""}`}
+          />
+          Resumen del período
+          <span className="text-text-secondary">
+            · ${totals.grand.toLocaleString("es-AR")} ·{" "}
+            {initialOrders.length} pedido{initialOrders.length === 1 ? "" : "s"}
+          </span>
+        </button>
+
+        {summaryOpen && (
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="rounded-md border border-border bg-surface px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-text-secondary">
+                Total {rangeLabel}
+              </p>
+              <p className="text-base font-semibold text-text-primary">
+                ${totals.grand.toLocaleString("es-AR")}
+              </p>
+            </div>
+            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-green-700">
+                Cobrado
+              </p>
+              <p className="text-base font-semibold text-green-800">
+                ${totals.paid.toLocaleString("es-AR")}
+              </p>
+            </div>
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-yellow-700">
+                Pendiente
+              </p>
+              <p className="text-base font-semibold text-yellow-800">
+                ${totals.pending.toLocaleString("es-AR")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-surface px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-text-secondary">
+                Ticket promedio
+              </p>
+              <p className="text-base font-semibold text-text-primary">
+                $
+                {(initialOrders.length > 0
+                  ? Math.round(totals.grand / initialOrders.length)
+                  : 0
+                ).toLocaleString("es-AR")}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex sm:flex-row flex-col gap-4 mb-6">
         <div className="relative flex-grow">
           <Search
