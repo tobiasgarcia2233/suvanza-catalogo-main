@@ -16,7 +16,7 @@ export default async function OdooDashboardPage({
   }>;
 }) {
   const session = await readSessionFromCookie();
-  if (!session) redirect("/admin/login?next=/odoo");
+  if (!session) redirect("/?next=/odoo");
 
   const { includeTransferred, startDate, endDate } = await searchParams;
   const orders = await fetchOrdersForOdoo({
