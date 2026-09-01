@@ -17,7 +17,6 @@ type FormState = {
   id: string;
   brand: string;
   name: string;
-  description: string;
   imageUrls: string[];
   priceTiers: Product["priceTiers"];
   variants: Variant[];
@@ -36,7 +35,6 @@ function initial(product?: Product): FormState {
     id: product ? String(product.id) : "",
     brand: product?.brand ?? "",
     name: product?.name ?? "",
-    description: product?.description ?? "",
     imageUrls: product?.imageUrls ?? [],
     priceTiers: product?.priceTiers ?? [],
     variants: variants.length > 0 ? variants : [emptyVariant()],
@@ -106,7 +104,6 @@ export default function ProductForm({
         id: state.id || undefined,
         brand: state.brand.trim() || null,
         name: state.name.trim(),
-        description: state.description.trim(),
         imageUrls: state.imageUrls,
         priceTiers: state.priceTiers,
         variants: state.variants,
@@ -177,15 +174,6 @@ export default function ProductForm({
             />
           </label>
         </div>
-        <label className="flex flex-col text-sm">
-          <span className="text-gray-600">Descripción</span>
-          <textarea
-            value={state.description}
-            onChange={(e) => setField("description", e.target.value)}
-            rows={4}
-            className="rounded border border-gray-300 px-3 py-2"
-          />
-        </label>
       </section>
 
       <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-4">

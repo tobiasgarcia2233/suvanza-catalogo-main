@@ -243,9 +243,6 @@ function recalculateAndSetState(
             id: promo.id,
             name: promo.title,
             brand: "Promoción",
-            description: promo.items
-              .map((i) => `${i.quantity}x ${i.name}`)
-              .join(", "),
             priceTiers: [],
             imageUrls: [],
             quantity: 1,
@@ -487,10 +484,6 @@ export const useCartStore = create(
             ...orderItem,
             priceTiers: baseDetails?.priceTiers || [],
             parentId: parentId,
-            description:
-              parentDetails?.description ||
-              (baseDetails as Product)?.description ||
-              "",
             imageUrls:
               baseDetails?.imageUrls ||
               parentDetails?.imageUrls ||

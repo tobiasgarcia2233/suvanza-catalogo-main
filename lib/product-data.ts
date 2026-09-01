@@ -181,8 +181,6 @@ export const realProducts: Product[] = [
     brand: "EXOGLOW",
     name: "Exosomas Vegetales",
     category: "Exosomas",
-    description:
-      "ExoGlow de SUVANZA combina exosomas vegetales, PDRN y factores de crecimiento, estimulando la actividad de fibroblastos y queratinocitos para promover la síntesis de colágeno, elastina y matriz extracelular. Su acción potencia la regeneración tisular y mejora la calidad de la dermis en pieles envejecidas o dañadas. Con propiedades antiinflamatorias, antioxidantes y despigmentantes, favorece la recuperación post-procedimiento y optimiza protocolos de rejuvenecimiento y bioreparación cutánea. La biotecnología exosómica lo convierte en una herramienta confiable y eficaz para resultados clínicos visibles y sostenidos.",
     imageUrls: ["/images/products/exoglow/1.jpg"],
     priceTiers: [],
     tags: ["Featured", "New"],
@@ -224,8 +222,6 @@ export const realProducts: Product[] = [
     brand: "S-BOOSTER Plus",
     name: "Mesoterapia con PDRN+",
     category: "Mesoterapia",
-    description:
-      "S-Booster Plus de SUVANZA aporta una alta concentración de PDRN, con acción directa en la estimulación de fibroblastos y reparación del ADN celular. Este mecanismo favorece la síntesis de colágeno y elastina, mejorando la densidad dérmica y promoviendo un efecto regenerador sostenido. Su potente perfil antiinflamatorio y antioxidante acelera la recuperación tisular, optimiza la oxigenación y uniformidad de la piel, y potencia los protocolos de rejuvenecimiento y revitalización cutánea. Es una herramienta confiable para médicos que buscan resultados clínicos visibles y duraderos en bioreparación dérmica.",
     imageUrls: ["/images/products/s-booster/1.jpg"],
     priceTiers: [],
     variants: [
@@ -265,8 +261,6 @@ export const realProducts: Product[] = [
     name: "Bioregenerador",
     category: "Bioregenerador",
     tags: ["Featured"], // MODIFIED
-    description:
-      "FULLORIA de SUVANZA es un ácido hialurónico híbrido de alto y bajo peso molecular, diseñado para inducir una bioestimulación profunda y mejorar la calidad cutánea de manera integral. Su acción combinada favorece la hidratación inmediata, la reestructuración de la matriz extracelular y la estimulación de fibroblastos, logrando un tejido más firme y elástico. Con un protocolo en dos sesiones separadas por 28 días y mantenimiento anual, FULLORIA se posiciona como una alternativa eficaz en prevención y tratamiento del envejecimiento cutáneo, mejorando textura, luminosidad y tonicidad. Su perfil innovador lo convierte en una herramienta clave dentro de los planes médicos de rejuvenecimiento facial y corporal.",
     imageUrls: ["/images/products/fulloria/1.jpg"],
     priceTiers: [],
     variants: [
@@ -294,8 +288,6 @@ export const realProducts: Product[] = [
     brand: "HYALDEW",
     name: "SHINE SkinBooster",
     category: "SkinBooster",
-    description:
-      "HyalDew SHINE de SUVANZA es un ácido hialurónico con lidocaína diseñado para zonas delicadas y superficiales, aportando luminosidad, suavidad y definición sutil. Es ideal para rejuvenecimiento y revitalización de áreas finas, como periorbitales y pómulos, y puede aplicarse mediante microinyecciones lineales, bolos superficiales o técnica en abanico, adaptándose a las necesidades del paciente para resultados visibles, naturales y duraderos.",
     imageUrls: ["/images/products/hyaldew/4.jpg"],
     priceTiers: [],
     variants: [
@@ -315,8 +307,6 @@ export const realProducts: Product[] = [
     brand: "XELA REDERM",
     name: "AH + ACIDO SUCCINICO",
     category: "Redermalización",
-    description:
-      "Xela Rederm de SUVANZA combina ácido hialurónico y ácido succínico para promover la regeneración y revitalización celular. Sus distintas concentraciones se adaptan a cada necesidad: 1.1 mg/ml ideal para ojeras y zonas delicadas, 1.8 mg/ml para firmeza y textura, y 2.2 mg/ml para bioestimulación profunda. El ácido succínico potencia la energía celular y protege frente al estrés oxidativo, favoreciendo elasticidad, tonicidad y luminosidad. Xela Rederm es una herramienta versátil para rejuvenecimiento y bioreparación dérmica, con resultados visibles y sostenibles.",
     priceTiers: [],
     imageUrls: ["/images/products/xela-rederm/1.png"],
     variants: [
@@ -379,8 +369,6 @@ export const realProducts: Product[] = [
     name: "AH Facial (Con lidocaina)",
     category: "Ácido Hialurónico",
     tags: ["Featured"], // MODIFIED
-    description:
-      "Rejeunesse es un ácido hialurónico con lidocaína de alta calidad coreana, diseñado para modelado y corrección de volúmenes faciales. Sus distintas densidades se adaptan a cada necesidad clínica: SHAPE es una herramienta confiable para protocolos de rejuvenecimiento, remodelación y corrección de volumen, con resultados visibles y duraderos. DEEP, para modelado y soporte de volúmenes más profundos..FINE, ideal para zonas delicadas y definición precisa. Gracias a su tecnología de diálisis, los fillers quedan prácticamente libres de BDDE, ofreciendo máxima seguridad y biocompatibilidad. Su formulación proporciona hidratación, efecto lifting natural y estimulación de la matriz extracelular, favoreciendo elasticidad, firmeza y contorno definido.",
     priceTiers: [],
     imageUrls: ["/images/products/rejeunesse/1.jpg"],
     variants: [
@@ -484,8 +472,6 @@ export const realProducts: Product[] = [
     brand: "HYALDEW",
     name: "AH Facial (Sin lidocaina)",
     category: "Ácido Hialurónico",
-    description:
-      "HyalDew de SUVANZA es un ácido hialurónico con lidocaína incluida, diseñado para hidratación profunda, remodelación cutánea y bioestimulación. Sus distintas densidades permiten adaptarlo a cada necesidad clínica: ALL para uso general y efecto volumizador equilibrado, MID para áreas que requieren soporte intermedio y definición de contornos.",
     priceTiers: [],
     imageUrls: ["/images/products/hyaldew/1.jpg"],
     variants: [
@@ -526,8 +512,6 @@ export const realProducts: Product[] = [
     brand: "DeneB",
     name: "AH Corporal",
     category: "Corporal",
-    description:
-      "DeneB de SUVANZA es un ácido hialurónico de alta cohesividad y lidocaína incluida, especialmente diseñado para modelado y voluminización corporal. Sus densidades permiten adaptarlo a diferentes necesidades: Soft, ideal para zonas que requieren suavidad y modelado uniforme, y Hard, indicado para áreas que necesitan mayor proyección y soporte estructural, como glúteos o pectorales.",
     priceTiers: [],
     imageUrls: ["/images/products/deneb/1.jpg"],
     variants: [
@@ -557,8 +541,6 @@ export const realProducts: Product[] = [
     name: "Hilos tensores",
     category: "Hilos",
     tags: ["Featured", "Special"], // MODIFIED
-    description:
-      "Hilos PDO Da:All son hilos de polidioxanona absorbibles de alta calidad, blancos y prácticamente invisibles, que estimulan la producción de colágeno y ofrecen un efecto tensor y lifting natural. Son biocompatibles y seguros, y su aplicación mínimamente invasiva permite tratamientos en zonas delicadas como nariz, frente y párpados.",
     priceTiers: [],
     imageUrls: ["/images/products/hilos/1.jpg"],
     variants: [
@@ -809,8 +791,6 @@ export const realProducts: Product[] = [
     brand: "Mirror Soft",
     name: "Cánulas y Agujas",
     category: "Insumos",
-    description:
-      "Mirror Soft ofrece cánulas y agujas de alta calidad para rellenos dérmicos, con punta roma que minimiza dolor y hematomas, y superficie pulida para una inserción suave y precisa. Son biocompatibles, estériles y desechables, compatibles con sistemas Luer y Luer-Lock, y cuentan con marcado cada 10 mm para mayor control. Disponibles en varios diámetros (17G a 30G) y longitudes (25 a 70 mm), se utilizan en procedimientos como rejuvenecimiento facial, corrección de ojeras, aumento de labios y remodelación no quirúrgica de nariz, garantizando seguridad y resultados uniformes.",
     priceTiers: [],
     imageUrls: ["/images/products/mirrorsoft/1.png"],
     variants: [

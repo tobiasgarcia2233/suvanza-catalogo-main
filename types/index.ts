@@ -16,7 +16,6 @@ export interface Product {
   id: number | string;
   brand?: string;
   name: string;
-  description: string;
   priceTiers: PriceTier[];
   imageUrls: string[];
   variants?: Variant[];

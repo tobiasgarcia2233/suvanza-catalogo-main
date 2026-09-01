@@ -131,14 +131,6 @@ export function ProductDetailModal() {
           </div>
 
           <div className="p-4 border-t">
-            {/* 2. Description */}
-            <div className="mb-6">
-              <h3 className="mb-2 font-bold text-lg">Descripción</h3>
-              <p className="text-text-secondary text-sm">
-                {selectedProduct.description}
-              </p>
-            </div>
-
             {/* 3. Promotions */}
             {/* Volume Promotions */}
             {representativePromotions.length > 1 && (
