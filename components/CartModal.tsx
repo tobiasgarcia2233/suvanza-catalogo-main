@@ -87,8 +87,15 @@ export function CartModal() {
             </div>
 
             {items.length === 0 ? (
-              <div className="flex flex-grow justify-center items-center">
+              <div className="flex flex-col flex-grow justify-center items-center gap-4">
                 <p className="text-text-secondary">Tu carrito esta vacio.</p>
+                <button
+                  onClick={() => setIsQuickAddOpen(true)}
+                  className="flex items-center gap-2 bg-brand hover:bg-brand-dark px-4 py-3 rounded-lg font-semibold text-white transition-colors"
+                >
+                  <Plus size={16} />
+                  Agregar productos
+                </button>
               </div>
             ) : (
               <>
