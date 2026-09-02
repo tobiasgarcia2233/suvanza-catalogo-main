@@ -5,6 +5,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { ConfirmationModal } from "@/components/ConfirmationModal";
 import { GalleryModal } from "@/components/GalleryModal";
+import { NumberInputWheelGuard } from "@/components/NumberInputWheelGuard";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <Navbar />
+        <NumberInputWheelGuard />
         <div className="pt-14">{children}</div>
         <ConfirmationModal />
         <GalleryModal />

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, FocusEvent } from "react";
 import Image from "next/image";
 import { useCartStore } from "@/store/cartStore";
 import { CartItem as CartItemType } from "@/types";
-import { Minus, Plus, X, Package } from "lucide-react"; // Added Package icon
+import { X, Package } from "lucide-react";
+import { NumberStepper } from "./ui/NumberStepper";
 
 interface CartItemProps {
   item: CartItemType;
@@ -15,55 +15,27 @@ export function CartItem({ item }: CartItemProps) {
     updateQuantity,
     removeFromCart,
     setItemManualDiscountPercentage,
-    setItemManualTotal,
     setItemManualPricePerUnit,
   } = useCartStore();
 
-  // Local state for what the USER IS TYPING in each input.
-  const [localPercentageInput, setLocalPercentageInput] = useState("");
-  const [localPriceInput, setLocalPriceInput] = useState("");
-  const [localQuantity, setLocalQuantity] = useState(String(item.quantity));
+  const effectivePricePerUnit =
+    item.quantity > 0 ? (item.customTotal ?? 0) / item.quantity : 0;
 
-  useEffect(() => {
-    setLocalQuantity(String(item.quantity));
+  const discountValue =
+    item.isPromo || item.discountPercentage <= 0
+      ? null
+      : item.discountPercentage;
 
-    // Calculate and set the effective price per unit for the input
-    const effectivePricePerUnit =
-      item.quantity > 0 ? (item.customTotal ?? 0) / item.quantity : 0;
-    setLocalPriceInput(effectivePricePerUnit.toFixed(0));
-
-    if (item.isPromo) {
-      setLocalPercentageInput("");
-    } else {
-      setLocalPercentageInput(
-        item.discountPercentage > 0 ? item.discountPercentage.toFixed(2) : ""
-      );
-    }
-  }, [item]);
-
-  const handleQuantityUpdate = () => {
-    const newQuantity = parseInt(localQuantity, 10);
-    if (!isNaN(newQuantity) && newQuantity !== item.quantity) {
+  const handleQuantityCommit = (value: number | null) => {
+    const newQuantity = value ?? item.quantity;
+    if (newQuantity !== item.quantity) {
       updateQuantity(item.id, newQuantity);
-    } else {
-      setLocalQuantity(String(item.quantity));
     }
   };
 
-  const handleInputFocus = (e: FocusEvent<HTMLInputElement>) => {
-    e.target.select();
-  };
-
-  // NEW: Handler for the price input
-  const handlePriceBlur = () => {
-    const newPrice =
-      localPriceInput === "" ? null : parseFloat(localPriceInput);
-    const currentPrice =
-      item.quantity > 0 ? (item.customTotal ?? 0) / item.quantity : 0;
-
-    // Only update if the price has actually changed to avoid unnecessary re-renders
-    if (newPrice?.toFixed(0) !== currentPrice.toFixed(0)) {
-      setItemManualPricePerUnit(item.id, newPrice);
+  const handlePriceCommit = (value: number | null) => {
+    if (value?.toFixed(0) !== effectivePricePerUnit.toFixed(0)) {
+      setItemManualPricePerUnit(item.id, value);
     }
   };
 
@@ -95,36 +67,14 @@ export function CartItem({ item }: CartItemProps) {
           </div>
 
           {/* Quantity Controls for the Promo Bundle */}
-          <div className="flex items-center gap-2 p-1.5 border rounded-md">
-            <button
-              onClick={() => {
-                updateQuantity(item.id, item.quantity - 1);
-              }}
-              className="hover:bg-gray-100 p-1 rounded-sm transition"
-            >
-              <Minus size={16} />
-            </button>
-            <input
-              type="number"
-              value={localQuantity}
-              onChange={(e) => setLocalQuantity(e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleQuantityUpdate}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleQuantityUpdate();
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              className="bg-transparent border-none focus:outline-none focus:ring-0 w-12 font-medium text-center"
-            />
-            <button
-              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-              className="hover:bg-gray-100 p-1 rounded-sm transition"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
+          <NumberStepper
+            value={item.quantity}
+            onCommit={handleQuantityCommit}
+            min={0}
+            step={1}
+            inputClassName="w-12"
+            aria-label="Cantidad"
+          />
 
           {/* Total Price for the Promo Bundle */}
           <div className="flex flex-col items-end w-32">
@@ -145,7 +95,7 @@ export function CartItem({ item }: CartItemProps) {
       </div>
     );
   } else {
-    // ========== RENDER VIEW FOR REGULAR PRODUCTS (UPDATED) ==========
+    // ========== RENDER VIEW FOR REGULAR PRODUCTS ==========
     return (
       <div className="flex flex-col gap-4 py-4 border-b border-border w-full">
         <div className="flex items-center gap-4 w-full">
@@ -165,86 +115,48 @@ export function CartItem({ item }: CartItemProps) {
           </div>
 
           <div className="flex justify-end items-center gap-6 w-full">
-            {/* Percentage Input (no changes) */}
-            <div className="flex items-center gap-2">
-              {/* <label
-                htmlFor={`discount-${item.id}`}
-                className="text-text-secondary text-sm"
-              >
-                Descuento
-              </label> */}
-              <div className="flex items-center">
-                <input
-                  id={`discount-${item.id}`}
-                  type="number"
-                  value={localPercentageInput}
-                  onChange={(e) => setLocalPercentageInput(e.target.value)}
-                  onBlur={() =>
-                    setItemManualDiscountPercentage(
-                      item.id,
-                      localPercentageInput === ""
-                        ? null
-                        : parseFloat(localPercentageInput)
-                    )
-                  }
-                  onFocus={handleInputFocus}
-                  placeholder="0"
-                  className="shadow-sm p-1 border-gray-300 focus:border-brand rounded-md focus:ring-brand w-16 sm:text-sm text-right"
-                />
-                <span className="ml-1 text-text-secondary">%</span>
-              </div>
-            </div>
-
-            {/* ================= UPDATED: Price Per Unit Input ================= */}
-            <div className="flex items-center gap-2">
-              {/* <label htmlFor={`price-${item.id}`} className="font-bold text-sm">
-                Precio unitario
-              </label> */}
-              <div className="flex items-center">
-                <span className="text-text-secondary">$</span>
-                <input
-                  id={`price-${item.id}`}
-                  type="number"
-                  value={localPriceInput}
-                  onChange={(e) => setLocalPriceInput(e.target.value)}
-                  onBlur={handlePriceBlur} // Use the new handler
-                  onFocus={handleInputFocus}
-                  className="shadow-sm p-1 border-gray-300 focus:border-brand rounded-md focus:ring-brand w-28 font-bold text-brand text-right"
-                />
-              </div>
-            </div>
-            {/* ================================================================= */}
-          </div>
-
-          {/* Quantity Controls (no changes) */}
-          <div className="flex items-center gap-2 p-1.5 border rounded-md">
-            <button
-              onClick={() => updateQuantity(item.id, item.quantity - 1)}
-              className="hover:bg-gray-100 p-1 rounded-sm transition"
-            >
-              <Minus size={16} />
-            </button>
-            <input
-              type="number"
-              value={localQuantity}
-              onChange={(e) => setLocalQuantity(e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleQuantityUpdate}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleQuantityUpdate();
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              className="bg-transparent border-none focus:outline-none focus:ring-0 w-12 font-medium text-center"
+            {/* Percentage Input */}
+            <NumberStepper
+              id={`discount-${item.id}`}
+              value={discountValue}
+              onCommit={(value) =>
+                setItemManualDiscountPercentage(item.id, value)
+              }
+              min={0}
+              max={100}
+              step={1}
+              decimals={2}
+              allowEmpty
+              placeholder="0"
+              suffix="%"
+              inputClassName="w-16 text-right"
             />
-            <button
-              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-              className="hover:bg-gray-100 p-1 rounded-sm transition"
-            >
-              <Plus size={16} />
-            </button>
+
+            {/* Price Per Unit Input */}
+            <NumberStepper
+              id={`price-${item.id}`}
+              value={effectivePricePerUnit}
+              onCommit={handlePriceCommit}
+              min={0}
+              step={100}
+              decimals={0}
+              allowEmpty
+              prefix="$"
+              className="font-bold text-brand"
+              inputClassName="w-28 text-right text-brand"
+            />
           </div>
+
+          {/* Quantity Controls */}
+          <NumberStepper
+            value={item.quantity}
+            onCommit={handleQuantityCommit}
+            min={0}
+            step={1}
+            inputClassName="w-12"
+            aria-label="Cantidad"
+          />
+
           <button
             onClick={() => removeFromCart(item.id)}
             className="text-text-secondary hover:text-red-500"

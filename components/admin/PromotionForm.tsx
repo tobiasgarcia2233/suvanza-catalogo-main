@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CrossPromotion, Product } from "@/types";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import Combobox from "./Combobox";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 
 type ItemState = {
   itemId: string;
@@ -215,15 +216,13 @@ export default function PromotionForm({
           </label>
           <label className="flex flex-col text-sm">
             <span className="text-gray-600">Precio total del combo</span>
-            <input
-              type="number"
-              required
-              min={0}
+            <NumberStepper
               value={state.totalPrice}
-              onChange={(e) =>
-                setState((s) => ({ ...s, totalPrice: Number(e.target.value) }))
+              onCommit={(value) =>
+                setState((s) => ({ ...s, totalPrice: value ?? 0 }))
               }
-              className="rounded border border-gray-300 px-3 py-2"
+              min={0}
+              step={100}
             />
           </label>
           <label className="flex items-center gap-2 text-sm mt-6">
@@ -283,29 +282,27 @@ export default function PromotionForm({
                 className="rounded border border-gray-300 px-2 py-2 text-sm"
               />
             </label>
-            <label className="flex flex-col text-xs md:col-span-1">
+            <label className="flex flex-col text-xs md:col-span-2">
               <span className="text-gray-600">Cant.</span>
-              <input
-                type="number"
-                min={1}
+              <NumberStepper
                 value={it.quantity}
-                onChange={(e) =>
-                  updateItem(i, { quantity: Number(e.target.value) })
-                }
-                className="rounded border border-gray-300 px-2 py-2 text-sm"
+                onCommit={(value) => updateItem(i, { quantity: value ?? 1 })}
+                min={1}
+                step={1}
+                className="text-sm"
+                inputClassName="w-8"
               />
             </label>
             <label className="flex flex-col text-xs md:col-span-2">
               <span className="text-gray-600">Precio unitario</span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
+              <NumberStepper
                 value={it.pricePerUnit}
-                onChange={(e) =>
-                  updateItem(i, { pricePerUnit: Number(e.target.value) })
+                onCommit={(value) =>
+                  updateItem(i, { pricePerUnit: value ?? 0 })
                 }
-                className="rounded border border-gray-300 px-2 py-2 text-sm"
+                min={0}
+                step={100}
+                className="text-sm"
               />
             </label>
             <label className="flex flex-col text-xs md:col-span-2">
@@ -324,7 +321,7 @@ export default function PromotionForm({
                 <option value="nameContains">Nombre contiene</option>
               </select>
             </label>
-            <label className="flex flex-col text-xs md:col-span-4">
+            <label className="flex flex-col text-xs md:col-span-3">
               <span className="text-gray-600">Marca (si matching ≠ exacto)</span>
               <input
                 value={it.brand}

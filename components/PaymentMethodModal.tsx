@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, X, Plus, Trash2, Wand2 } from "lucide-react";
 import { PAYMENT_METHODS, type OrderPayment } from "@/types";
 import { usePauseRefresh } from "@/store/refreshGuardStore";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 
 type Row = { method: string; amount: string; percent: string };
 
@@ -202,33 +203,35 @@ export default function PaymentMethodModal({
                 ) &&
                   row.method && <option value={row.method}>{row.method}</option>}
               </select>
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.01"
+              <NumberStepper
                 value={row.amount}
-                onChange={(e) => updateAmount(i, e.target.value)}
+                onCommit={(value) =>
+                  updateAmount(i, value == null ? "" : String(value))
+                }
+                min={0}
+                step={100}
+                allowEmpty
                 placeholder="Monto"
-                className="rounded border border-gray-300 px-2 py-2 text-sm w-24"
+                className="w-32 text-sm"
+                inputClassName="text-right"
+                aria-label="Monto"
               />
-              <div className="relative w-20">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={1000}
-                  step="0.01"
-                  value={row.percent}
-                  onChange={(e) => updatePercent(i, e.target.value)}
-                  placeholder="%"
-                  disabled={orderTotal <= 0}
-                  className="w-full rounded border border-gray-300 pl-2 pr-5 py-2 text-sm disabled:bg-gray-100"
-                />
-                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
-                  %
-                </span>
-              </div>
+              <NumberStepper
+                value={row.percent}
+                onCommit={(value) =>
+                  updatePercent(i, value == null ? "" : String(value))
+                }
+                min={0}
+                max={1000}
+                step={1}
+                allowEmpty
+                disabled={orderTotal <= 0}
+                placeholder="%"
+                suffix="%"
+                className="w-24 text-sm"
+                inputClassName="text-right"
+                aria-label="Porcentaje"
+              />
               <button
                 type="button"
                 onClick={() => fillRemaining(i)}
