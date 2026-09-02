@@ -138,9 +138,9 @@ export function CartItem({ item }: CartItemProps) {
               value={effectivePricePerUnit}
               onCommit={handlePriceCommit}
               min={0}
-              step={100}
               decimals={0}
               allowEmpty
+              showButtons={false}
               prefix="$"
               className="font-bold text-brand"
               inputClassName="w-28 text-right text-brand"

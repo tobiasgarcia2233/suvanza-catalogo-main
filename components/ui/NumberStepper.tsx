@@ -21,6 +21,8 @@ type NumberStepperProps = {
   /** Si es true, un input vacío confirma `null` en vez de revertir. */
   allowEmpty?: boolean;
   disabled?: boolean;
+  /** Muestra los botones +/- (default: true). Si es false, queda solo el input. */
+  showButtons?: boolean;
   id?: string;
   placeholder?: string;
   /** Selecciona el contenido al enfocar (default: true). */
@@ -80,6 +82,7 @@ export function NumberStepper({
   locale = "es-AR",
   allowEmpty = false,
   disabled = false,
+  showButtons = true,
   id,
   placeholder,
   selectOnFocus = true,
@@ -132,16 +135,18 @@ export function NumberStepper({
         disabled ? "opacity-60" : ""
       } ${className}`}
     >
-      <button
-        type="button"
-        tabIndex={-1}
-        disabled={disabled || (min != null && (committed ?? 0) <= min)}
-        onClick={() => stepBy(-1)}
-        className="shrink-0 rounded-sm p-1 text-text-secondary transition hover:bg-gray-100 disabled:opacity-30"
-        aria-label="Disminuir"
-      >
-        <Minus size={16} />
-      </button>
+      {showButtons && (
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={disabled || (min != null && (committed ?? 0) <= min)}
+          onClick={() => stepBy(-1)}
+          className="shrink-0 rounded-sm p-1 text-text-secondary transition hover:bg-gray-100 disabled:opacity-30"
+          aria-label="Disminuir"
+        >
+          <Minus size={16} />
+        </button>
+      )}
 
       {prefix != null && (
         <span className="shrink-0 text-text-secondary">{prefix}</span>
@@ -183,16 +188,18 @@ export function NumberStepper({
         <span className="shrink-0 text-text-secondary">{suffix}</span>
       )}
 
-      <button
-        type="button"
-        tabIndex={-1}
-        disabled={disabled || (max != null && (committed ?? 0) >= max)}
-        onClick={() => stepBy(1)}
-        className="shrink-0 rounded-sm p-1 text-text-secondary transition hover:bg-gray-100 disabled:opacity-30"
-        aria-label="Aumentar"
-      >
-        <Plus size={16} />
-      </button>
+      {showButtons && (
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={disabled || (max != null && (committed ?? 0) >= max)}
+          onClick={() => stepBy(1)}
+          className="shrink-0 rounded-sm p-1 text-text-secondary transition hover:bg-gray-100 disabled:opacity-30"
+          aria-label="Aumentar"
+        >
+          <Plus size={16} />
+        </button>
+      )}
     </div>
   );
 }
