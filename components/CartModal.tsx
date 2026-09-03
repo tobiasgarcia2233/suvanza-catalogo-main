@@ -46,6 +46,15 @@ export function CartModal() {
     }
   }, [isCartOpen]);
 
+  // The cart's open/closed state lives in a global store that survives client-side
+  // navigation. Reset it when this modal unmounts (e.g. leaving the route) so the
+  // cart doesn't pop open on its own the next time the page mounts.
+  useEffect(() => {
+    return () => {
+      closeCart();
+    };
+  }, [closeCart]);
+
   // --- 2. Create the new handler function ---
   const handleCloseAndReset = () => {
     // If we are in editing mode, reset the cart's data state.
