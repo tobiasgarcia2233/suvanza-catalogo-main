@@ -64,6 +64,13 @@ CREATE TABLE IF NOT EXISTS product_promotions (
   PRIMARY KEY (product_id, promotion_id)
 );
 
+CREATE TABLE IF NOT EXISTS sellers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -75,6 +82,7 @@ CREATE TABLE IF NOT EXISTS orders (
   buyer_details TEXT NOT NULL,
   seller_name TEXT,
   auto_apply_promos INTEGER NOT NULL DEFAULT 0,
+  promos_sold TEXT,
   transferred_to_odoo INTEGER NOT NULL DEFAULT 0,
   transferred_at TEXT,
   notes TEXT,
@@ -84,6 +92,7 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_seller_name ON orders(seller_name);
 CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_images_variant ON product_images(variant_id);
 CREATE INDEX IF NOT EXISTS idx_price_tiers_product ON price_tiers(product_id);

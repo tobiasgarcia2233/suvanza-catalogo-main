@@ -82,6 +82,16 @@ export function OrderInfoModal({
     setIsSubmitting(true);
     setError("");
 
+    // Combos are unrolled into their constituent products below, so capture
+    // which ones were actually sold here first.
+    const promosSold = items
+      .filter((item: CartItem) => item.isPromo)
+      .map((item: CartItem) => ({
+        id: String(item.promoId ?? item.id),
+        title: item.name,
+        quantity: item.quantity,
+      }));
+
     // ====================== PAYLOAD BUILDER LOGIC START ======================
     // This logic "unrolls" promos into their constituent items for the backend.
     const flattenedItems = items.reduce((acc: any[], item: CartItem) => {
@@ -159,6 +169,7 @@ export function OrderInfoModal({
       buyerDni,
       buyerPhone,
       items: flattenedItems, // Use the new flattened items list
+      promos: promosSold,
       subtotal,
       total,
       autoApplyPromos,

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteOrder, updateOrder, getOrder } from "@/lib/orderQueries";
+import { getSellerBySlug } from "@/lib/sellerQueries";
+import { readSessionFromCookie } from "@/lib/auth";
 
 interface CartLine {
   id: string | number;
@@ -27,6 +29,11 @@ export async function PATCH(
   context: { params: Promise<{ orderId: string }> },
 ) {
   try {
+    const session = await readSessionFromCookie();
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
     const { orderId } = await context.params;
     const body = await request.json();
 
@@ -53,6 +60,9 @@ export async function PATCH(
       };
       if (body.autoApplyPromos !== undefined) {
         patch.autoApplyPromos = !!body.autoApplyPromos;
+      }
+      if (Array.isArray(body.promos)) {
+        patch.promos_sold = body.promos;
       }
     }
 
@@ -101,11 +111,39 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ orderId: string }> },
 ) {
   try {
     const { orderId } = await context.params;
+    const sellerSlug = request.nextUrl.searchParams.get("sellerSlug");
+
+    if (sellerSlug) {
+      // Unauthenticated seller deleting their own order: verify the slug is
+      // whitelisted and the order actually belongs to that seller and hasn't
+      // already been processed by an admin.
+      const seller = await getSellerBySlug(sellerSlug);
+      if (!seller) {
+        return NextResponse.json({ message: "Vendedor no encontrado." }, { status: 404 });
+      }
+      const order = await getOrder(orderId);
+      if (!order || order.seller_name.toLowerCase() !== seller.name.toLowerCase()) {
+        return NextResponse.json({ message: "Pedido no encontrado." }, { status: 404 });
+      }
+      const transferred = (order as { transferred_to_odoo?: boolean }).transferred_to_odoo;
+      if (transferred) {
+        return NextResponse.json(
+          { message: "Este pedido ya fue procesado y no puede eliminarse." },
+          { status: 403 },
+        );
+      }
+    } else {
+      const session = await readSessionFromCookie();
+      if (!session) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     await deleteOrder(orderId);
     return NextResponse.json({ message: "Deleted" });
   } catch (error) {

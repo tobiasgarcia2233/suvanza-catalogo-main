@@ -89,6 +89,7 @@ export interface Order {
   notes?: string | null;
   payment_method?: PaymentMethod | string | null;
   payments?: OrderPayment[] | null;
+  promos_sold?: { id: string; title: string; quantity: number }[] | null;
 }
 
 export interface CrossPromotion {

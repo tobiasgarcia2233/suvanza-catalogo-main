@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { readSessionFromCookie } from "@/lib/auth";
 import { fetchRecentOrders } from "@/lib/orderQueries";
 import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
 import { OrdersPageClient } from "./OrdersPageClient";
@@ -11,6 +13,9 @@ export default async function OrdersDashboardPage({
 }: {
   searchParams: Promise<{ q?: string; startDate?: string; endDate?: string }>;
 }) {
+  const session = await readSessionFromCookie();
+  if (!session) redirect("/?next=/orders");
+
   const { q, startDate, endDate } = await searchParams;
 
   const [initialOrders, products, promotions] = await Promise.all([

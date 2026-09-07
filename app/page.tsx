@@ -4,6 +4,7 @@ import {
   ClipboardList,
   ArrowRightLeft,
   ArrowRight,
+  Users,
 } from "lucide-react";
 import LoginForm from "@/components/LoginForm";
 import { readSessionFromCookie } from "@/lib/auth";
@@ -16,6 +17,12 @@ const links = [
     label: "Administración",
     description: "Gestiona productos, variantes y promociones.",
     icon: Tags,
+  },
+  {
+    href: "/admin/sellers",
+    label: "Vendedores",
+    description: "Da de alta vendedores y genera sus links de acceso.",
+    icon: Users,
   },
   {
     href: "/orders",
