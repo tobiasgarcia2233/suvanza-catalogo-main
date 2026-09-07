@@ -15,6 +15,7 @@ export function CartFooter() {
     discountDetails,
     mode,
     originalOrder,
+    editSellerSlug,
     items,
     autoApplyPromos,
   } = useCartStore();
@@ -33,7 +34,10 @@ export function CartFooter() {
     const updatedOrderData = { items, subtotal, total, autoApplyPromos };
 
     try {
-      const response = await fetch(`/api/orders/${orderIdToUpdate}`, {
+      const endpoint = editSellerSlug
+        ? `/api/orders/${orderIdToUpdate}?sellerSlug=${encodeURIComponent(editSellerSlug)}`
+        : `/api/orders/${orderIdToUpdate}`;
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedOrderData),

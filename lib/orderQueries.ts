@@ -108,9 +108,12 @@ export async function fetchRecentOrders(
 }
 
 export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
+  // Unlike the admin dashboards, this keeps every order for the seller —
+  // completed sales stay visible permanently instead of disappearing once
+  // they're paid or transferred to Odoo.
   const res = await db.execute({
     sql: `SELECT * FROM orders
-          WHERE LOWER(seller_name) = LOWER(?) AND transferred_to_odoo = 0
+          WHERE LOWER(seller_name) = LOWER(?)
           ORDER BY created_at DESC`,
     args: [sellerName],
   });

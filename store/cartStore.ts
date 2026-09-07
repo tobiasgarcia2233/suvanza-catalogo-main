@@ -50,11 +50,12 @@ const findProductForPromoItem = (
 interface CartState {
   mode: "creating" | "editing";
   originalOrder: Order | null; // Changed from originalOrderId
+  editSellerSlug: string | null; // Set when a seller edits their own order via their personal link, so the PATCH request can be authorized without an admin session.
   items: CartItem[];
   subtotal: number;
   total: number;
   discountDetails: DiscountDetail[];
-  loadOrderForEdit: (order: Order) => void;
+  loadOrderForEdit: (order: Order, sellerSlug?: string) => void;
   getOrderForEdit: () => Order | null; // Added getter to the interface
   addMultipleToCart: (
     parentProduct: Product,
@@ -474,6 +475,7 @@ export const useCartStore = create(
       discountDetails: [],
       mode: "creating",
       originalOrder: null,
+      editSellerSlug: null,
       autoApplyPromos: true,
 
       toggleAutoApplyPromos: () => {
@@ -490,7 +492,7 @@ export const useCartStore = create(
         return null;
       },
 
-      loadOrderForEdit: (order) => {
+      loadOrderForEdit: (order, sellerSlug) => {
         const loadedItems: CartItem[] = order.items.map((orderItem) => {
           const products = getProducts();
           const parentProduct = products.find((p) =>
@@ -529,6 +531,7 @@ export const useCartStore = create(
           items: loadedItems,
           originalOrder: order,
           mode: "editing",
+          editSellerSlug: sellerSlug ?? null,
           autoApplyPromos: order.autoApplyPromos ?? true,
         });
         set(recalculateAndSetState(loadedItems, get().autoApplyPromos));
@@ -711,6 +714,7 @@ export const useCartStore = create(
           discountDetails: [],
           mode: "creating",
           originalOrder: null,
+          editSellerSlug: null,
         });
       },
     }),

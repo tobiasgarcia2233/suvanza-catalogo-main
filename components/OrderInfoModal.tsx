@@ -24,7 +24,7 @@ export function OrderInfoModal({
   const router = useRouter();
 
   const { isOrderInfoModalOpen, closeOrderInfoModal, closeCart } = useUIStore();
-  const { items, subtotal, total, clearCart, mode, originalOrder } =
+  const { items, subtotal, total, clearCart, mode, originalOrder, editSellerSlug } =
     useCartStore();
 
   const [buyerName, setBuyerName] = useState("");
@@ -159,7 +159,9 @@ export function OrderInfoModal({
 
     const isEditing = mode === "editing" && originalOrder;
     const endpoint = isEditing
-      ? `/api/orders/${originalOrder.id}`
+      ? editSellerSlug
+        ? `/api/orders/${originalOrder.id}?sellerSlug=${encodeURIComponent(editSellerSlug)}`
+        : `/api/orders/${originalOrder.id}`
       : "/api/orders";
     const method = isEditing ? "PATCH" : "POST";
 

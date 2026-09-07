@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import FullScreenButton from "@/components/FullScreenButton";
 import NavLinks from "@/components/NavLinks";
+import SellerNavLinks from "@/components/SellerNavLinks";
 import AdminSignOut from "@/app/admin/AdminSignOut";
 import { readSessionFromCookie } from "@/lib/auth";
 
@@ -22,7 +23,7 @@ export default async function Navbar() {
           />
         </Link>
 
-        {session && <NavLinks />}
+        {session ? <NavLinks /> : <SellerNavLinks />}
 
         <div className="ml-auto flex items-center gap-3">
           <FullScreenButton />

@@ -2,41 +2,34 @@
 
 import { Product } from "@/types";
 import Image from "next/image";
+import { ImageOff } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay, Pagination, Navigation } from "swiper/modules";
 
-// Import Swiper styles
-import "swiper/css";
-import "swiper/css/pagination";
-import "swiper/css/navigation";
-
-interface ProductCardProps {
+interface CatalogProductCardProps {
   product: Product;
 }
 
-export function CatalogProductCard({ product }: ProductCardProps) {
+export function CatalogProductCard({ product }: CatalogProductCardProps) {
   const { openProductDetail } = useUIStore();
 
-  // --- MODIFICATION START ---
-  // 1. Get all unique image URLs from all variants
+  // Images usually live on the variants, not the product itself — fall back
+  // to the product's own images only if none of its variants have any. Every
+  // card shows a single representative image so the row stays a fixed,
+  // predictable size regardless of how many photos a product has.
   const allVariantImages = Array.from(
     new Set(
       product.variants?.flatMap((variant) => variant.imageUrls || []) || []
     )
   );
+  const imageToShow = allVariantImages[0] ?? product.imageUrls[0];
 
-  // 2. Use variant images if they exist, otherwise fall back to the main product images
-  const imagesToShow =
-    allVariantImages.length > 0 ? allVariantImages : product.imageUrls;
-  // --- MODIFICATION END ---
+  const variants = product.variants ?? [];
+  const hasMultipleVariants = variants.length > 1;
 
   const getLowestPrice = () => {
-    if (product.variants && product.variants.length > 0) {
+    if (variants.length > 0) {
       return Math.min(
-        ...product.variants
-          .flatMap((v) => v.priceTiers || [])
-          .map((t) => t.pricePerUnit)
+        ...variants.flatMap((v) => v.priceTiers || []).map((t) => t.pricePerUnit)
       );
     }
     if (product.priceTiers.length > 0) {
@@ -45,54 +38,55 @@ export function CatalogProductCard({ product }: ProductCardProps) {
     return 0;
   };
 
-  const priceToDisplay = getLowestPrice();
-
   return (
     <div
       onClick={() => openProductDetail(product)}
-      className="group relative flex flex-col bg-white shadow-md hover:shadow-xl rounded-xl h-screen overflow-hidden transition-shadow cursor-pointer"
+      className="flex items-start gap-4 sm:gap-5 bg-white hover:shadow-lg shadow-sm p-4 border border-border rounded-xl transition-shadow cursor-pointer"
     >
-      {/* Image Slider Section - Top */}
-      <div className="relative flex-shrink-0 w-full h-2/3">
-        <Swiper
-          spaceBetween={10}
-          centeredSlides={true}
-          autoplay={{
-            delay: 3500,
-            disableOnInteraction: false,
-          }}
-          navigation={false}
-          loop={imagesToShow.length > 1} // Only loop if there is more than one image
-          modules={[Autoplay, Pagination, Navigation]}
-          className="w-full h-full mySwiper"
-        >
-          {imagesToShow.map((imageUrl, index) => (
-            <SwiperSlide key={index}>
-              <Image
-                src={imageUrl}
-                alt={`${product.name} - ${index + 1}`}
-                fill
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                className="object-cover"
-              />
-            </SwiperSlide>
-          ))}
-        </Swiper>
+      <div className="relative flex flex-shrink-0 justify-center items-center bg-gray-50 rounded-lg w-24 sm:w-32 aspect-square overflow-hidden">
+        {imageToShow ? (
+          <Image
+            src={imageToShow}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 96px, 128px"
+            className="object-contain p-2"
+          />
+        ) : (
+          <ImageOff className="text-gray-300" size={28} />
+        )}
       </div>
 
-      {/* Product Details Section - Bottom */}
-      <div className="flex flex-col flex-grow p-6 text-left">
-        <h2 className="mb-1 font-bold text-text-primary text-3xl">
+      <div className="flex flex-col flex-1 min-w-0">
+        <h3 className="font-bold text-text-primary text-base sm:text-lg truncate">
+          {product.brand}
+        </h3>
+        <p className="mb-2 text-text-secondary text-sm truncate">
           {product.name}
-        </h2>
-        <p className="mb-3 text-text-secondary text-xl">{product.brand}</p>
-
-        {/* Spacer to push price to the bottom */}
-        <div className="flex-grow" />
-
-        <p className="mt-2 font-extrabold text-brand text-2xl">
-          Desde ${priceToDisplay.toLocaleString("es-CL")}
         </p>
+
+        {hasMultipleVariants ? (
+          <div className="flex flex-wrap gap-2">
+            {variants.map((variant) => (
+              <span
+                key={variant.id}
+                className="bg-gray-100 px-3.5 py-2 rounded-full text-sm whitespace-nowrap"
+              >
+                {variant.name}{" "}
+                <span className="font-bold text-brand">
+                  $
+                  {(variant.priceTiers?.[0]?.pricePerUnit || 0).toLocaleString(
+                    "es-CL"
+                  )}
+                </span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="font-extrabold text-brand text-lg">
+            Desde ${getLowestPrice().toLocaleString("es-CL")}
+          </p>
+        )}
       </div>
     </div>
   );
