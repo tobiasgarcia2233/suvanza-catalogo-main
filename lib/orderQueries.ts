@@ -270,7 +270,10 @@ export async function fetchOrdersForOdoo(options: {
 
 export async function getSellerSalesStats(
   sellerName: string,
-): Promise<{ productsSold: number }> {
+): Promise<{ productsSold: number; cartsBuilt: number }> {
+  // "Carro cerrado" = the sale closed: the seller received payment and
+  // handed over the product, i.e. status COMPLETED. Each order row counts
+  // once, even if the same buyer ordered more than once.
   const res = await db.execute({
     sql: `SELECT items FROM orders
           WHERE LOWER(seller_name) = LOWER(?) AND status = 'COMPLETED'`,
@@ -283,7 +286,7 @@ export async function getSellerSalesStats(
     productsSold += items.reduce((sum, it) => sum + (it.quantity || 0), 0);
   }
 
-  return { productsSold };
+  return { productsSold, cartsBuilt: res.rows.length };
 }
 
 export async function bulkSetTransferred(
