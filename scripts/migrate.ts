@@ -29,6 +29,7 @@ async function applySchema() {
   const legacy: [string, string][] = [
     ["products", "category"],
     ["products", "tags"],
+    ["products", "description"],
     ["price_tiers", "label"],
   ];
   for (const [table, col] of legacy) {
@@ -45,6 +46,7 @@ async function applySchema() {
     ["orders", "notes", "TEXT"],
     ["orders", "payment_method", "TEXT"],
     ["orders", "payments", "TEXT"],
+    ["orders", "promos_sold", "TEXT"],
   ];
   for (const [table, col, type] of added) {
     try {
@@ -74,13 +76,12 @@ async function wipeData() {
 
 async function seedProduct(product: Product, index: number) {
   await db.execute({
-    sql: `INSERT INTO products (id, brand, name, description, position)
-          VALUES (?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO products (id, brand, name, position)
+          VALUES (?, ?, ?, ?)`,
     args: [
       String(product.id),
       product.brand ?? null,
       product.name,
-      product.description ?? null,
       index,
     ],
   });

@@ -71,6 +71,18 @@
   body.no-scroll {
     overflow: hidden;
   }
+
+  /* Ocultar las flechas nativas de los <input type="number">.
+     El incremento/decremento se hace con los botones +/- del NumberStepper. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 .media-carousel {

@@ -14,7 +14,6 @@ export type ProductInput = {
   id?: string;
   brand?: string | null;
   name: string;
-  description?: string;
   position?: number;
   imageUrls?: string[];
   priceTiers?: PriceTier[];
@@ -52,11 +51,10 @@ async function persistProduct(
 
   if (isUpdate) {
     await db.execute({
-      sql: `UPDATE products SET brand=?, name=?, description=?, position=?, updated_at=? WHERE id=?`,
+      sql: `UPDATE products SET brand=?, name=?, position=?, updated_at=? WHERE id=?`,
       args: [
         input.brand ?? null,
         input.name,
-        input.description ?? null,
         input.position ?? 0,
         now,
         id,
@@ -74,12 +72,11 @@ async function persistProduct(
     );
   } else {
     await db.execute({
-      sql: `INSERT INTO products (id, brand, name, description, position) VALUES (?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO products (id, brand, name, position) VALUES (?, ?, ?, ?)`,
       args: [
         id,
         input.brand ?? null,
         input.name,
-        input.description ?? null,
         input.position ?? 0,
       ],
     });

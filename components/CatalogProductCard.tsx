@@ -87,10 +87,6 @@ export function CatalogProductCard({ product }: ProductCardProps) {
         </h2>
         <p className="mb-3 text-text-secondary text-xl">{product.brand}</p>
 
-        <p className="mb-4 overflow-hidden text-text-secondary text-sm text-ellipsis line-clamp-3">
-          {product.description}
-        </p>
-
         {/* Spacer to push price to the bottom */}
         <div className="flex-grow" />
 

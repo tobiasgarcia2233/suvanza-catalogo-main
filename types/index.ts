@@ -16,7 +16,6 @@ export interface Product {
   id: number | string;
   brand?: string;
   name: string;
-  description: string;
   priceTiers: PriceTier[];
   imageUrls: string[];
   variants?: Variant[];
@@ -90,6 +89,7 @@ export interface Order {
   notes?: string | null;
   payment_method?: PaymentMethod | string | null;
   payments?: OrderPayment[] | null;
+  promos_sold?: { id: string; title: string; quantity: number }[] | null;
 }
 
 export interface CrossPromotion {

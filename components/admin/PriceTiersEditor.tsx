@@ -2,6 +2,7 @@
 
 import type { PriceTier } from "@/types";
 import { Plus, Trash2 } from "lucide-react";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 
 export default function PriceTiersEditor({
   value,
@@ -32,25 +33,22 @@ export default function PriceTiersEditor({
         <div key={i} className="flex gap-2 items-center">
           <label className="flex flex-col text-xs flex-1">
             <span className="text-gray-600">Desde (cant.)</span>
-            <input
-              type="number"
-              min={1}
+            <NumberStepper
               value={tier.minQuantity}
-              onChange={(e) => update(i, { minQuantity: Number(e.target.value) })}
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              onCommit={(value) => update(i, { minQuantity: value ?? 1 })}
+              min={1}
+              step={1}
+              className="text-sm"
             />
           </label>
           <label className="flex flex-col text-xs flex-1">
             <span className="text-gray-600">Precio unitario</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
+            <NumberStepper
               value={tier.pricePerUnit}
-              onChange={(e) =>
-                update(i, { pricePerUnit: Number(e.target.value) })
-              }
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              onCommit={(value) => update(i, { pricePerUnit: value ?? 0 })}
+              min={0}
+              step={100}
+              className="text-sm"
             />
           </label>
           <button

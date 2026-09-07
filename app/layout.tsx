@@ -2,9 +2,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import FullScreenButton from "@/components/FullScreenButton";
+import Navbar from "@/components/Navbar";
 import { ConfirmationModal } from "@/components/ConfirmationModal";
 import { GalleryModal } from "@/components/GalleryModal";
+import { NumberInputWheelGuard } from "@/components/NumberInputWheelGuard";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,8 +29,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
-        {children}
-        <FullScreenButton />
+        <Navbar />
+        <NumberInputWheelGuard />
+        <div className="pt-14">{children}</div>
         <ConfirmationModal />
         <GalleryModal />
       </body>

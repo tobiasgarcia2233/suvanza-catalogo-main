@@ -9,7 +9,6 @@ function readProduct(row: Row): Product {
     id: row.id as string,
     brand: (row.brand as string | null) ?? undefined,
     name: row.name as string,
-    description: (row.description as string | null) ?? "",
     priceTiers: [],
     imageUrls: [],
     variants: [],

@@ -1,7 +1,7 @@
 "use client";
 
 import { Variant } from "@/types";
-import { Minus, Plus } from "lucide-react";
+import { NumberStepper } from "./ui/NumberStepper";
 
 interface QuickAddRowProps {
   variant: Variant & { brand: string; parentName: string }; // Combined type for easy access
@@ -28,29 +28,14 @@ export function QuickAddRow({
         <p className="font-bold text-brand">${price.toLocaleString("es-CL")}</p>
       </div>
       <div className="flex justify-end col-span-3">
-        <div className="flex items-center gap-2 p-1.5 border rounded-md">
-          <button
-            onClick={() => onQuantityChange(Math.max(0, quantity - 1))}
-            className="hover:bg-gray-100 p-1 rounded-sm transition"
-          >
-            <Minus size={16} />
-          </button>
-          <input
-            type="number"
-            value={quantity}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              onQuantityChange(isNaN(val) || val < 0 ? 0 : val);
-            }}
-            className="bg-transparent border-none focus:outline-none focus:ring-0 w-12 font-medium text-center"
-          />
-          <button
-            onClick={() => onQuantityChange(quantity + 1)}
-            className="hover:bg-gray-100 p-1 rounded-sm transition"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
+        <NumberStepper
+          value={quantity}
+          onCommit={(value) => onQuantityChange(Math.max(0, value ?? 0))}
+          min={0}
+          step={1}
+          inputClassName="w-12"
+          aria-label="Cantidad"
+        />
       </div>
     </div>
   );

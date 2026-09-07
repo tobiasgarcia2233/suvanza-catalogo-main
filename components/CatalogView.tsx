@@ -11,7 +11,6 @@ interface CatalogViewProps {
 }
 
 // A component for products with multiple, distinct variants (e.g., Xela Rederm)
-// NOTE: I've kept the description you added here.
 function MultiVariantProductSection({ product }: { product: Product }) {
   const { openProductDetail } = useUIStore();
   return (
@@ -32,11 +31,6 @@ function MultiVariantProductSection({ product }: { product: Product }) {
         <div className="w-full md:w-2/3">
           <h3 className="font-bold text-3xl">{product.brand}</h3>
           <p className="mb-4 text-text-secondary text-lg">{product.name}</p>
-          <p className="mb-4 text-text-secondary text-base">
-            {" "}
-            {/* Added description */}
-            {product.description}
-          </p>
           <div className="gap-4 grid grid-cols-1 sm:grid-cols-3">
             {product.variants?.map((variant) => (
               <div

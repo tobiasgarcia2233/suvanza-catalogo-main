@@ -7,6 +7,7 @@ import { ViewModeSwitch, ViewMode } from "@/components/ViewModeSwitch";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { CartModal } from "@/components/CartModal";
 import { OrderInfoModal } from "@/components/OrderInfoModal";
+import { SellerOrdersPanel } from "@/components/SellerOrdersPanel";
 import ProductsHydrator from "@/components/ProductsHydrator";
 import type { Product, CrossPromotion } from "@/types";
 import { useUIStore } from "@/store/uiStore";
@@ -16,10 +17,12 @@ import Image from "next/image";
 
 export default function SellerPageClient({
   sellerName,
+  sellerSlug,
   products,
   promotions,
 }: {
   sellerName: string;
+  sellerSlug: string;
   products: Product[];
   promotions: CrossPromotion[];
 }) {
@@ -89,6 +92,7 @@ export default function SellerPageClient({
         sellerName={sellerName}
         onOrderSuccess={triggerSuccessAnimation}
       />
+      <SellerOrdersPanel sellerSlug={sellerSlug} />
     </div>
   );
 }

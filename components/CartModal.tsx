@@ -46,6 +46,15 @@ export function CartModal() {
     }
   }, [isCartOpen]);
 
+  // The cart's open/closed state lives in a global store that survives client-side
+  // navigation. Reset it when this modal unmounts (e.g. leaving the route) so the
+  // cart doesn't pop open on its own the next time the page mounts.
+  useEffect(() => {
+    return () => {
+      closeCart();
+    };
+  }, [closeCart]);
+
   // --- 2. Create the new handler function ---
   const handleCloseAndReset = () => {
     // If we are in editing mode, reset the cart's data state.
@@ -87,8 +96,15 @@ export function CartModal() {
             </div>
 
             {items.length === 0 ? (
-              <div className="flex flex-grow justify-center items-center">
+              <div className="flex flex-col flex-grow justify-center items-center gap-4">
                 <p className="text-text-secondary">Tu carrito esta vacio.</p>
+                <button
+                  onClick={() => setIsQuickAddOpen(true)}
+                  className="flex items-center gap-2 bg-brand hover:bg-brand-dark px-4 py-3 rounded-lg font-semibold text-white transition-colors"
+                >
+                  <Plus size={16} />
+                  Agregar productos
+                </button>
               </div>
             ) : (
               <>

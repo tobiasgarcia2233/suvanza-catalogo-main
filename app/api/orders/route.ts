@@ -1,6 +1,26 @@
 import { NextResponse } from "next/server";
-import { createOrder } from "@/lib/orderQueries";
+import { createOrder, fetchOrdersBySeller } from "@/lib/orderQueries";
+import { getSellerByName, getSellerBySlug } from "@/lib/sellerQueries";
 import type { CartItem } from "@/types";
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const sellerSlug = searchParams.get("sellerSlug");
+  if (!sellerSlug) {
+    return NextResponse.json(
+      { message: "sellerSlug is required." },
+      { status: 400 },
+    );
+  }
+
+  const seller = await getSellerBySlug(sellerSlug);
+  if (!seller) {
+    return NextResponse.json({ message: "Vendedor no encontrado." }, { status: 404 });
+  }
+
+  const orders = await fetchOrdersBySeller(seller.name);
+  return NextResponse.json({ orders });
+}
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +39,14 @@ export async function POST(request: Request) {
 
     const now = new Date();
     const formattedSellerName = (body.sellerName || "").replace(/_/g, " ");
+
+    const seller = await getSellerByName(formattedSellerName);
+    if (!seller) {
+      return NextResponse.json(
+        { message: "Vendedor no autorizado." },
+        { status: 403 },
+      );
+    }
 
     const id = await createOrder({
       status: "PENDING_PAYMENT",
@@ -44,8 +72,9 @@ export async function POST(request: Request) {
         dni: body.buyerDni,
         phone: body.buyerPhone,
       },
-      seller_name: formattedSellerName,
+      seller_name: seller.name,
       autoApplyPromos: !!body.autoApplyPromos,
+      promos_sold: Array.isArray(body.promos) ? body.promos : null,
     });
 
     return NextResponse.json({ message: "Order created", id }, { status: 201 });

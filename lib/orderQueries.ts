@@ -20,6 +20,7 @@ type OrderRow = {
   notes: string | null;
   payment_method: string | null;
   payments: string | null;
+  promos_sold: string | null;
 };
 
 function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; transferred_at?: string | null } {
@@ -38,6 +39,15 @@ function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; trans
   if (!payments && r.payment_method) {
     payments = [{ method: r.payment_method, amount: Number(r.total) }];
   }
+  let promosSold: { id: string; title: string; quantity: number }[] | null = null;
+  if (r.promos_sold) {
+    try {
+      const parsed = JSON.parse(r.promos_sold);
+      if (Array.isArray(parsed)) promosSold = parsed;
+    } catch {
+      /* malformed — fall through */
+    }
+  }
   return {
     id: r.id,
     created_at: r.created_at,
@@ -54,6 +64,7 @@ function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; trans
     notes: r.notes,
     payment_method: r.payment_method,
     payments,
+    promos_sold: promosSold,
   };
 }
 
@@ -96,6 +107,16 @@ export async function fetchRecentOrders(
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
 }
 
+export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
+  const res = await db.execute({
+    sql: `SELECT * FROM orders
+          WHERE LOWER(seller_name) = LOWER(?) AND transferred_to_odoo = 0
+          ORDER BY created_at DESC`,
+    args: [sellerName],
+  });
+  return (res.rows as unknown as OrderRow[]).map(rowToOrder);
+}
+
 export async function getOrder(id: string): Promise<Order | null> {
   const res = await db.execute({
     sql: "SELECT * FROM orders WHERE id = ?",
@@ -110,8 +131,8 @@ export async function createOrder(input: Omit<Order, "id" | "created_at"> & {
 }): Promise<string> {
   const id = input.id ?? crypto.randomUUID();
   await db.execute({
-    sql: `INSERT INTO orders (id, status, order_date, total, discounted_amount, items, buyer_details, seller_name, auto_apply_promos)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO orders (id, status, order_date, total, discounted_amount, items, buyer_details, seller_name, auto_apply_promos, promos_sold)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.status,
@@ -122,6 +143,9 @@ export async function createOrder(input: Omit<Order, "id" | "created_at"> & {
       JSON.stringify(input.buyer_details),
       input.seller_name ?? null,
       input.autoApplyPromos ? 1 : 0,
+      input.promos_sold && input.promos_sold.length > 0
+        ? JSON.stringify(input.promos_sold)
+        : null,
     ],
   });
   return id;
@@ -167,6 +191,14 @@ export async function updateOrder(
   if (patch.autoApplyPromos !== undefined) {
     updates.push("auto_apply_promos = ?");
     args.push(patch.autoApplyPromos ? 1 : 0);
+  }
+  if (patch.promos_sold !== undefined) {
+    updates.push("promos_sold = ?");
+    args.push(
+      patch.promos_sold && patch.promos_sold.length > 0
+        ? JSON.stringify(patch.promos_sold)
+        : null,
+    );
   }
   if (patch.transferred_to_odoo !== undefined) {
     updates.push("transferred_to_odoo = ?");
@@ -231,6 +263,24 @@ export async function fetchOrdersForOdoo(options: {
     args,
   });
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
+}
+
+export async function getSellerSalesStats(
+  sellerName: string,
+): Promise<{ productsSold: number }> {
+  const res = await db.execute({
+    sql: `SELECT items FROM orders
+          WHERE LOWER(seller_name) = LOWER(?) AND status = 'COMPLETED'`,
+    args: [sellerName],
+  });
+
+  let productsSold = 0;
+  for (const row of res.rows as unknown as { items: string }[]) {
+    const items = JSON.parse(row.items) as { quantity: number }[];
+    productsSold += items.reduce((sum, it) => sum + (it.quantity || 0), 0);
+  }
+
+  return { productsSold };
 }
 
 export async function bulkSetTransferred(

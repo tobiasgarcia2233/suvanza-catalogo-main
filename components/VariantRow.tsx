@@ -3,8 +3,9 @@
 
 import Image from "next/image";
 import { Variant } from "@/types";
-import { Minus, Plus, Camera } from "lucide-react"; // Import the Camera icon
+import { Camera } from "lucide-react"; // Import the Camera icon
 import { useUIStore } from "@/store/uiStore"; // Import the UI store
+import { NumberStepper } from "./ui/NumberStepper";
 
 interface VariantRowProps {
   variant: Variant;
@@ -75,37 +76,16 @@ export function VariantRow({
             ${price.toLocaleString("es-CL")}
           </p>
         </div>
-        <div className="flex justify-end items-center gap-2 p-1 border rounded-md">
-          <button
-            onClick={() =>
-              onQuantityChange(
-                String(Math.max(0, (parseInt(quantity, 10) || 0) - 1))
-              )
-            }
-            className="hover:bg-gray-100 p-1 rounded-sm transition"
-          >
-            <Minus size={16} />
-          </button>
-          <input
-            type="number"
-            value={quantity}
-            onChange={(e) => onQuantityChange(e.target.value)}
-            onFocus={(e) => e.target.select()}
-            onBlur={(e) => {
-              const qty = parseInt(e.target.value, 10);
-              if (isNaN(qty) || qty < 0) onQuantityChange("0");
-            }}
-            className="bg-transparent border-none focus:outline-none focus:ring-0 w-10 font-medium text-brand text-center"
-          />
-          <button
-            onClick={() =>
-              onQuantityChange(String((parseInt(quantity, 10) || 0) + 1))
-            }
-            className="hover:bg-gray-100 p-1 rounded-sm transition"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
+        <NumberStepper
+          value={quantity}
+          onCommit={(value) =>
+            onQuantityChange(String(Math.max(0, value ?? 0)))
+          }
+          min={0}
+          step={1}
+          inputClassName="w-10 text-brand"
+          aria-label="Cantidad"
+        />
       </div>
     </div>
   );

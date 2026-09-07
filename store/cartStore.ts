@@ -60,7 +60,11 @@ interface CartState {
     parentProduct: Product,
     quantities: Map<string, number>
   ) => void;
-  addCrossPromotionToCart: (promotion: CrossPromotion) => void;
+  addCrossPromotionToCart: (
+    promotion: CrossPromotion,
+    quantity?: number,
+    replaceLooseItems?: boolean
+  ) => void;
   removeFromCart: (itemId: string | number) => void;
   updateQuantity: (itemId: string | number, quantity: number) => void;
   setItemManualDiscountPercentage: (
@@ -243,9 +247,6 @@ function recalculateAndSetState(
             id: promo.id,
             name: promo.title,
             brand: "Promoción",
-            description: promo.items
-              .map((i) => `${i.quantity}x ${i.name}`)
-              .join(", "),
             priceTiers: [],
             imageUrls: [],
             quantity: 1,
@@ -284,8 +285,21 @@ function recalculateAndSetState(
   processedItems.forEach((item) => {
     if (item.isPromo) {
       const promoDefinition = getPromotions().find((p) => p.id === item.id);
-      const basePromoPrice = promoDefinition ? promoDefinition.totalPrice : 0;
-      const promoTotal = basePromoPrice * item.quantity;
+      const basePromoPrice = promoDefinition
+        ? promoDefinition.totalPrice
+        : item.customTotal ?? 0;
+
+      let effectivePromoPrice = basePromoPrice;
+      if (
+        item.manualPricePerUnit !== null &&
+        item.manualPricePerUnit !== undefined
+      ) {
+        effectivePromoPrice = item.manualPricePerUnit;
+      } else if (item.manualPercentage > 0) {
+        effectivePromoPrice = basePromoPrice * (1 - item.manualPercentage / 100);
+      }
+
+      const promoTotal = effectivePromoPrice * item.quantity;
       finalTotal += promoTotal;
       const promoSubtotal = item.includedItems!.reduce((sum, includedItem) => {
         const variantData = getProducts()
@@ -380,7 +394,20 @@ function recalculateAndSetState(
   const finalCartItems = processedItems.map((item) => {
     if (item.isPromo) {
       const promoDefinition = getPromotions().find((p) => p.id === item.id);
-      const basePromoPrice = promoDefinition ? promoDefinition.totalPrice : 0;
+      const basePromoPrice = promoDefinition
+        ? promoDefinition.totalPrice
+        : item.customTotal ?? 0;
+
+      let effectivePromoPrice = basePromoPrice;
+      if (
+        item.manualPricePerUnit !== null &&
+        item.manualPricePerUnit !== undefined
+      ) {
+        effectivePromoPrice = item.manualPricePerUnit;
+      } else if (item.manualPercentage > 0) {
+        effectivePromoPrice = basePromoPrice * (1 - item.manualPercentage / 100);
+      }
+
       const subtotalForItem =
         item.includedItems!.reduce((sum, i) => {
           const variantData = getProducts()
@@ -389,7 +416,7 @@ function recalculateAndSetState(
           const basePrice = variantData?.priceTiers?.[0]?.pricePerUnit || 0;
           return sum + basePrice * i.quantity;
         }, 0) * item.quantity;
-      const totalForItem = basePromoPrice * item.quantity;
+      const totalForItem = effectivePromoPrice * item.quantity;
       const discount = subtotalForItem - totalForItem;
       return {
         ...item,
@@ -487,10 +514,6 @@ export const useCartStore = create(
             ...orderItem,
             priceTiers: baseDetails?.priceTiers || [],
             parentId: parentId,
-            description:
-              parentDetails?.description ||
-              (baseDetails as Product)?.description ||
-              "",
             imageUrls:
               baseDetails?.imageUrls ||
               parentDetails?.imageUrls ||
@@ -576,25 +599,23 @@ export const useCartStore = create(
         set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
       },
 
-      addCrossPromotionToCart: (promotion) => {
+      addCrossPromotionToCart: (
+        promotion,
+        quantity = 1,
+        replaceLooseItems = true
+      ) => {
+        const qty = Math.max(1, Math.floor(quantity || 1));
         let currentItems = [...get().items];
-        const newPromoItems: CartItem[] = [];
+
+        const includedItems: CartItem[] = [];
         const promoVariantIds = new Set<string>();
-
-        promotion.items.forEach((promoItem) => {
-          const result = findProductForPromoItem(promoItem.name);
-          if (result) promoVariantIds.add(result.variant.id);
-        });
-
-        currentItems = currentItems.filter(
-          (item) => !promoVariantIds.has(item.id as string)
-        );
 
         promotion.items.forEach((promoItem) => {
           const result = findProductForPromoItem(promoItem.name);
           if (!result) return;
           const { parentProduct, variant } = result;
-          const itemToAdd: CartItem = {
+          promoVariantIds.add(variant.id as string);
+          includedItems.push({
             ...parentProduct,
             id: variant.id,
             name: variant.name,
@@ -607,16 +628,47 @@ export const useCartStore = create(
             manualTotal: null,
             manualPercentage: 0,
             promoId: promotion.id,
-          };
-          newPromoItems.push(itemToAdd);
+          });
         });
 
-        set(
-          recalculateAndSetState(
-            [...currentItems, ...newPromoItems],
-            get().autoApplyPromos
-          )
+        // Optionally drop loose items that this promo covers (used when the promo
+        // is meant to replace items already in the cart). When false, the loose
+        // items the user explicitly added are kept alongside the promo bundle.
+        if (replaceLooseItems) {
+          currentItems = currentItems.filter(
+            (item) => !promoVariantIds.has(item.id as string)
+          );
+        }
+
+        const existingIndex = currentItems.findIndex(
+          (item) => item.isPromo && item.id === promotion.id
         );
+
+        if (existingIndex > -1) {
+          currentItems[existingIndex] = {
+            ...currentItems[existingIndex],
+            quantity: currentItems[existingIndex].quantity + qty,
+            includedItems,
+          };
+        } else {
+          currentItems.push({
+            id: promotion.id,
+            name: promotion.title,
+            brand: "Promoción",
+            priceTiers: [],
+            imageUrls: [],
+            quantity: qty,
+            isPromo: true,
+            customTotal: promotion.totalPrice,
+            includedItems,
+            finalPrice: promotion.totalPrice,
+            discountPercentage: 0,
+            manualTotal: null,
+            manualPercentage: 0,
+          });
+        }
+
+        set(recalculateAndSetState(currentItems, get().autoApplyPromos));
       },
 
       updateQuantity: (itemId, quantity) => {
