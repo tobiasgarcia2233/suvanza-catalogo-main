@@ -47,6 +47,7 @@ async function applySchema() {
     ["orders", "payment_method", "TEXT"],
     ["orders", "payments", "TEXT"],
     ["orders", "promos_sold", "TEXT"],
+    ["products", "category_id", "TEXT REFERENCES categories(id) ON DELETE SET NULL"],
   ];
   for (const [table, col, type] of added) {
     try {
@@ -56,6 +57,11 @@ async function applySchema() {
       /* column already present — ignore */
     }
   }
+
+  // Index depends on products.category_id, which may have just been added above.
+  await db.execute(
+    "CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)",
+  );
 }
 
 async function wipeData() {

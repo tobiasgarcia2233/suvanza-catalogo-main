@@ -12,10 +12,17 @@ export interface Variant {
   priceTiers?: PriceTier[];
 }
 
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export interface Product {
   id: number | string;
   brand?: string;
   name: string;
+  categoryId?: string;
+  categoryName?: string;
   priceTiers: PriceTier[];
   imageUrls: string[];
   variants?: Variant[];

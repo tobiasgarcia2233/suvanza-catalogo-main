@@ -16,6 +16,7 @@ export default function ProductsTable({ products }: { products: Product[] }) {
       const hay = [
         p.name,
         p.brand ?? "",
+        p.categoryName ?? "",
         ...(p.variants?.map((v) => v.name) ?? []),
       ]
         .join(" ")
@@ -29,7 +30,7 @@ export default function ProductsTable({ products }: { products: Product[] }) {
       <SearchBox
         value={q}
         onChange={setQ}
-        placeholder="Buscar por nombre, marca o variante..."
+        placeholder="Buscar por nombre, marca, categoría o variante..."
         className="max-w-md"
       />
 
@@ -40,6 +41,7 @@ export default function ProductsTable({ products }: { products: Product[] }) {
               <th className="text-left py-2 px-4 w-14"></th>
               <th className="text-left py-2 px-4">Nombre</th>
               <th className="text-left py-2 px-4">Marca</th>
+              <th className="text-left py-2 px-4">Categoría</th>
               <th className="text-left py-2 px-4">Variantes</th>
               <th className="text-right py-2 px-4"></th>
             </tr>
@@ -64,6 +66,9 @@ export default function ProductsTable({ products }: { products: Product[] }) {
                   <td className="py-2 px-4 font-medium">{p.name}</td>
                   <td className="py-2 px-4 text-gray-600">{p.brand ?? "—"}</td>
                   <td className="py-2 px-4 text-gray-600">
+                    {p.categoryName ?? "—"}
+                  </td>
+                  <td className="py-2 px-4 text-gray-600">
                     {p.variants?.length ?? 0}
                   </td>
                   <td className="py-2 px-4 text-right">
@@ -79,7 +84,7 @@ export default function ProductsTable({ products }: { products: Product[] }) {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-gray-500">
+                <td colSpan={6} className="py-8 text-center text-gray-500">
                   {q
                     ? "No se encontraron productos para esa búsqueda."
                     : "Todavía no hay productos. Creá el primero."}

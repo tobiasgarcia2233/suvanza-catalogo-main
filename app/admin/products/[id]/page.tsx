@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProduct, getAllPromotions } from "@/lib/productQueries";
+import { getAllCategories } from "@/lib/categoryQueries";
 import ProductForm from "@/components/admin/ProductForm";
 import { ChevronLeft } from "lucide-react";
 
@@ -13,9 +14,10 @@ export default async function EditProductPage({
 }) {
   const { id } = await params;
   const decoded = decodeURIComponent(id);
-  const [product, promotions] = await Promise.all([
+  const [product, promotions, categories] = await Promise.all([
     getProduct(decoded),
     getAllPromotions(),
+    getAllCategories(),
   ]);
   if (!product) notFound();
 
@@ -31,7 +33,7 @@ export default async function EditProductPage({
         <h1 className="text-2xl font-bold mt-2">Editar producto</h1>
         <p className="text-sm text-gray-500">{product.name}</p>
       </div>
-      <ProductForm product={product} promotions={promotions} />
+      <ProductForm product={product} promotions={promotions} categories={categories} />
     </div>
   );
 }

@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, Variant, CrossPromotion } from "@/types";
+import type { Product, Variant, CrossPromotion, Category } from "@/types";
 import ImageUpload from "./ImageUpload";
 import PriceTiersEditor from "./PriceTiersEditor";
 import SearchBox from "./SearchBox";
+import Combobox from "./Combobox";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -17,6 +18,7 @@ type FormState = {
   id: string;
   brand: string;
   name: string;
+  category: string;
   imageUrls: string[];
   priceTiers: Product["priceTiers"];
   variants: Variant[];
@@ -35,6 +37,7 @@ function initial(product?: Product): FormState {
     id: product ? String(product.id) : "",
     brand: product?.brand ?? "",
     name: product?.name ?? "",
+    category: product?.categoryName ?? "",
     imageUrls: product?.imageUrls ?? [],
     priceTiers: product?.priceTiers ?? [],
     variants: variants.length > 0 ? variants : [emptyVariant()],
@@ -45,9 +48,11 @@ function initial(product?: Product): FormState {
 export default function ProductForm({
   product,
   promotions,
+  categories,
 }: {
   product?: Product;
   promotions: CrossPromotion[];
+  categories: Category[];
 }) {
   const router = useRouter();
   const isEdit = !!product;
@@ -55,6 +60,11 @@ export default function ProductForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoQuery, setPromoQuery] = useState("");
+
+  const categoryOptions = useMemo(
+    () => categories.map((c) => ({ value: c.name, label: c.name })),
+    [categories],
+  );
 
   const filteredPromotions = useMemo(() => {
     const q = promoQuery.trim().toLowerCase();
@@ -104,6 +114,7 @@ export default function ProductForm({
         id: state.id || undefined,
         brand: state.brand.trim() || null,
         name: state.name.trim(),
+        category: state.category.trim() || null,
         imageUrls: state.imageUrls,
         priceTiers: state.priceTiers,
         variants: state.variants,
@@ -171,6 +182,16 @@ export default function ProductForm({
               value={state.brand}
               onChange={(e) => setField("brand", e.target.value)}
               className="rounded border border-gray-300 px-3 py-2"
+            />
+          </label>
+          <label className="flex flex-col text-sm">
+            <span className="text-gray-600">Categoría</span>
+            <Combobox
+              value={state.category}
+              options={categoryOptions}
+              placeholder="— Elegir o escribir una nueva —"
+              customLabel="categoría nueva"
+              onChange={(next) => setField("category", next)}
             />
           </label>
         </div>

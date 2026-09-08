@@ -9,12 +9,17 @@ function readProduct(row: Row): Product {
     id: row.id as string,
     brand: (row.brand as string | null) ?? undefined,
     name: row.name as string,
+    categoryId: (row.category_id as string | null) ?? undefined,
+    categoryName: (row.category_name as string | null) ?? undefined,
     priceTiers: [],
     imageUrls: [],
     variants: [],
     crossProductPromotions: [],
   };
 }
+
+const PRODUCT_SELECT = `SELECT products.*, categories.name AS category_name
+  FROM products LEFT JOIN categories ON categories.id = products.category_id`;
 
 function buildPromotions(
   promos: Row[],
@@ -49,7 +54,7 @@ function buildPromotions(
 export async function getAllProducts(): Promise<Product[]> {
   const [prodRes, varRes, tierRes, imgRes, linksRes, promoRes, promoItemRes] =
     await Promise.all([
-      db.execute("SELECT * FROM products ORDER BY position ASC, name ASC"),
+      db.execute(`${PRODUCT_SELECT} ORDER BY products.position ASC, products.name ASC`),
       db.execute("SELECT * FROM variants ORDER BY position ASC"),
       db.execute("SELECT * FROM price_tiers ORDER BY position ASC, min_quantity ASC"),
       db.execute("SELECT * FROM product_images ORDER BY position ASC"),
@@ -130,7 +135,7 @@ export async function getAllPromotions(): Promise<CrossPromotion[]> {
 
 export async function getProduct(id: string): Promise<Product | null> {
   const res = await db.execute({
-    sql: "SELECT * FROM products WHERE id = ?",
+    sql: `${PRODUCT_SELECT} WHERE products.id = ?`,
     args: [id],
   });
   if (res.rows.length === 0) return null;

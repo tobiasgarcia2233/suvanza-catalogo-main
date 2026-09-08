@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import type { Product, Variant, PriceTier } from "@/types";
+import { findOrCreateCategory } from "./categoryQueries";
 
 function slugify(s: string) {
   return s
@@ -14,6 +15,7 @@ export type ProductInput = {
   id?: string;
   brand?: string | null;
   name: string;
+  category?: string | null;
   position?: number;
   imageUrls?: string[];
   priceTiers?: PriceTier[];
@@ -49,12 +51,18 @@ async function persistProduct(
 ): Promise<void> {
   const now = new Date().toISOString();
 
+  const categoryName = input.category?.trim();
+  const categoryId = categoryName
+    ? (await findOrCreateCategory(categoryName)).id
+    : null;
+
   if (isUpdate) {
     await db.execute({
-      sql: `UPDATE products SET brand=?, name=?, position=?, updated_at=? WHERE id=?`,
+      sql: `UPDATE products SET brand=?, name=?, category_id=?, position=?, updated_at=? WHERE id=?`,
       args: [
         input.brand ?? null,
         input.name,
+        categoryId,
         input.position ?? 0,
         now,
         id,
@@ -72,11 +80,12 @@ async function persistProduct(
     );
   } else {
     await db.execute({
-      sql: `INSERT INTO products (id, brand, name, position) VALUES (?, ?, ?, ?)`,
+      sql: `INSERT INTO products (id, brand, name, category_id, position) VALUES (?, ?, ?, ?, ?)`,
       args: [
         id,
         input.brand ?? null,
         input.name,
+        categoryId,
         input.position ?? 0,
       ],
     });
