@@ -18,6 +18,7 @@ export function CartFooter() {
     editSellerSlug,
     items,
     autoApplyPromos,
+    comboSelection,
   } = useCartStore();
   const { openOrderInfoModal, closeCart } = useUIStore();
   const totalDiscount = subtotal - total;
@@ -105,7 +106,7 @@ export function CartFooter() {
 
       <button
         onClick={openOrderInfoModal}
-        disabled={total < 0 || (mode === "creating" && total === 0)}
+        disabled={!!comboSelection || total < 0 || (mode === "creating" && total === 0)}
         className={`mt-6 py-3 rounded-button w-full font-semibold text-white transition
           ${
             mode === "editing"

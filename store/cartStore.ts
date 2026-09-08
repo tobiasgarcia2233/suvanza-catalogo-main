@@ -11,7 +11,32 @@ import {
   Variant,
   Order,
 } from "@/types";
-import { getProducts, getPromotions } from "@/store/productsStore";
+import { getProducts, getPromotions, useProductsStore } from "@/store/productsStore";
+import {
+  applyCandidate, choiceKey, expandAutomaticBundles, findComboCandidates,
+  allocateComboSelection, selectionLimits, isAutomaticBundle,
+  type ComboCandidate,
+} from "@/lib/comboSelection";
+
+export interface ComboOption {
+  id: string;
+  promotion: CrossPromotion;
+  selectedQuantity: number;
+  maxQuantity: number;
+}
+
+interface ComboSelection {
+  revision: number;
+  inputKey: string;
+  options: ComboOption[];
+  availableItems: CartItem[];
+  candidates: ComboCandidate[];
+  quantities: Record<string, number>;
+  previewItems: CartItem[];
+  total: number;
+}
+
+let selectionRevision = 0;
 
 export interface DiscountDetail {
   id: string;
@@ -80,9 +105,15 @@ interface CartState {
   ) => void;
   autoApplyPromos: boolean;
   toggleAutoApplyPromos: () => void;
+  comboSelection: ComboSelection | null;
+  comboInputKey: string;
+  comboConfirmedKey?: string;
+  updateComboSelectionQuantity: (id: string, quantity: number, revision: number) => void;
+  applyComboSelection: (revision: number) => void;
+  cancelComboSelection: () => void;
 }
 
-function recalculateAndSetState(
+function priceCart(
   items: CartItem[],
   autoApplyPromos: boolean
 ): Partial<CartState> {
@@ -112,167 +143,6 @@ function recalculateAndSetState(
     processedItems = Array.from(mergedItems.values());
   }
 
-  if (autoApplyPromos) {
-    while (true) {
-      let promoSwappedThisIteration = false;
-      const looseItems = processedItems.filter((item) => !item.isPromo);
-      const brandQuantities = new Map<string, number>();
-      const idQuantities = new Map<string | number, number>();
-      looseItems.forEach((item) => {
-        idQuantities.set(
-          item.id,
-          (idQuantities.get(item.id) || 0) + item.quantity
-        );
-        if (item.brand) {
-          brandQuantities.set(
-            item.brand,
-            (brandQuantities.get(item.brand) || 0) + item.quantity
-          );
-        }
-      });
-      for (const promo of getPromotions()) {
-        const promoAlreadyInCart = processedItems.some(
-          (item) => item.id === promo.id
-        );
-        if (promoAlreadyInCart) {
-          continue;
-        }
-        const canApplyPromo = promo.items.every((promoItem) => {
-          if (promoItem.matchBy === "brand") {
-            return (
-              (brandQuantities.get(promoItem.id) || 0) >= promoItem.quantity
-            );
-          } else if (promoItem.matchBy === "nameContains") {
-            const totalMatchingQuantity = looseItems
-              .filter(
-                (item) =>
-                  item.brand === promoItem.brand &&
-                  item.name.includes(promoItem.id as string)
-              )
-              .reduce((sum, item) => sum + item.quantity, 0);
-            return totalMatchingQuantity >= promoItem.quantity;
-          } else {
-            return (idQuantities.get(promoItem.id) || 0) >= promoItem.quantity;
-          }
-        });
-        if (canApplyPromo) {
-          promoSwappedThisIteration = true;
-          let tempLooseItems = [...looseItems];
-          const consumedVariantsForManifest: CartItem[] = [];
-          promo.items.forEach((promoItem) => {
-            let quantityToConsume = promoItem.quantity;
-            const remainingItems: CartItem[] = [];
-            if (promoItem.matchBy === "brand") {
-              const itemsOfBrand = tempLooseItems.filter(
-                (i) => i.brand === promoItem.id
-              );
-              const otherItems = tempLooseItems.filter(
-                (i) => i.brand !== promoItem.id
-              );
-              for (const item of itemsOfBrand) {
-                if (quantityToConsume <= 0) {
-                  remainingItems.push(item);
-                  continue;
-                }
-                const amountToTake = Math.min(item.quantity, quantityToConsume);
-                consumedVariantsForManifest.push({
-                  ...item,
-                  quantity: amountToTake,
-                });
-                quantityToConsume -= amountToTake;
-                if (item.quantity > amountToTake) {
-                  remainingItems.push({
-                    ...item,
-                    quantity: item.quantity - amountToTake,
-                  });
-                }
-              }
-              tempLooseItems = [...otherItems, ...remainingItems];
-            } else if (promoItem.matchBy === "nameContains") {
-              const itemsToProcess = tempLooseItems.filter(
-                (item) =>
-                  item.brand === promoItem.brand &&
-                  item.name.includes(promoItem.id as string)
-              );
-              const otherItems = tempLooseItems.filter(
-                (item) => !itemsToProcess.includes(item)
-              );
-              for (const item of itemsToProcess) {
-                if (quantityToConsume <= 0) {
-                  remainingItems.push(item);
-                  continue;
-                }
-                const amountToTake = Math.min(item.quantity, quantityToConsume);
-                consumedVariantsForManifest.push({
-                  ...item,
-                  quantity: amountToTake,
-                });
-                quantityToConsume -= amountToTake;
-                if (item.quantity > amountToTake) {
-                  remainingItems.push({
-                    ...item,
-                    quantity: item.quantity - amountToTake,
-                  });
-                }
-              }
-              tempLooseItems = [...otherItems, ...remainingItems];
-            } else {
-              const itemsToProcess = tempLooseItems.filter(
-                (i) => i.id === promoItem.id
-              );
-              const otherItems = tempLooseItems.filter(
-                (i) => i.id !== promoItem.id
-              );
-              for (const item of itemsToProcess) {
-                if (quantityToConsume <= 0) {
-                  remainingItems.push(item);
-                  continue;
-                }
-                const amountToTake = Math.min(item.quantity, quantityToConsume);
-                consumedVariantsForManifest.push({
-                  ...item,
-                  quantity: amountToTake,
-                });
-                quantityToConsume -= amountToTake;
-                if (item.quantity > amountToTake) {
-                  remainingItems.push({
-                    ...item,
-                    quantity: item.quantity - amountToTake,
-                  });
-                }
-              }
-              tempLooseItems = [...otherItems, ...remainingItems];
-            }
-          });
-          const promoCartItem: CartItem = {
-            id: promo.id,
-            name: promo.title,
-            brand: "Promoción",
-            priceTiers: [],
-            imageUrls: [],
-            quantity: 1,
-            isPromo: true,
-            customTotal: promo.totalPrice,
-            includedItems: consumedVariantsForManifest,
-            finalPrice: promo.totalPrice,
-            discountPercentage: 0,
-            manualTotal: null,
-            manualPercentage: 0,
-          };
-          processedItems = [
-            ...processedItems.filter((item) => item.isPromo),
-            ...tempLooseItems,
-            promoCartItem,
-          ];
-          break;
-        }
-      }
-      if (!promoSwappedThisIteration) {
-        break;
-      }
-    }
-  }
-
   const brandTotalQuantities = new Map<string, number>();
   processedItems.forEach((item) => {
     if (!item.isPromo && item.brand) {
@@ -285,7 +155,7 @@ function recalculateAndSetState(
 
   processedItems.forEach((item) => {
     if (item.isPromo) {
-      const promoDefinition = getPromotions().find((p) => p.id === item.id);
+      const promoDefinition = getPromotions().find((p) => p.id === (item.promoId ?? item.id));
       const basePromoPrice = promoDefinition
         ? promoDefinition.totalPrice
         : item.customTotal ?? 0;
@@ -394,7 +264,7 @@ function recalculateAndSetState(
 
   const finalCartItems = processedItems.map((item) => {
     if (item.isPromo) {
-      const promoDefinition = getPromotions().find((p) => p.id === item.id);
+      const promoDefinition = getPromotions().find((p) => p.id === (item.promoId ?? item.id));
       const basePromoPrice = promoDefinition
         ? promoDefinition.totalPrice
         : item.customTotal ?? 0;
@@ -459,15 +329,92 @@ function recalculateAndSetState(
   });
 
   return {
-    items: finalCartItems,
+    items: finalCartItems.map((item, index) => ({
+      ...item,
+      // Distinct manual adjustments may leave two lines for the same variant.
+      // Keep its product ID intact, but let the UI edit each line separately.
+      cartLineKey: finalCartItems.some((other, otherIndex) => otherIndex !== index && other.id === item.id)
+        ? `line:${item.id}:${index}` : undefined,
+    })),
     subtotal: finalSubtotal,
     total: finalTotal,
     discountDetails: finalDiscountDetails,
   };
 }
 
+function selectionInputKey(items: CartItem[]): string {
+  const purchase = (item: CartItem): unknown => ({
+    id: item.id, quantity: item.quantity, name: item.name, brand: item.brand,
+    priceTiers: item.priceTiers, isPromo: item.isPromo, promoId: item.promoId,
+    comboSource: item.comboSource, comboChoiceKey: item.comboChoiceKey,
+    manualPercentage: item.manualPercentage, manualPricePerUnit: item.manualPricePerUnit,
+    manualTotal: item.manualTotal, includedItems: item.includedItems?.map(purchase),
+  });
+  return JSON.stringify([items.map(purchase), getProducts(), getPromotions()]);
+}
+
+function confirmedSelectionKey(items: CartItem[]): string {
+  const expanded = expandAutomaticBundles(items, true);
+  const candidates = findComboCandidates(expanded, getPromotions());
+  return JSON.stringify(candidates.map((candidate) =>
+    choiceKey(expanded, candidates, candidate.promotion.id)).sort());
+}
+
+function updateSelectionPreview(selection: ComboSelection, quantities: Record<string, number>): ComboSelection | null {
+  const allocated = allocateComboSelection(selection.availableItems,
+    selection.candidates.map((candidate) => candidate.promotion), quantities);
+  if (!allocated) return null;
+  const limits = selectionLimits(selection.availableItems, selection.candidates, quantities);
+  const priced = priceCart(allocated, true);
+  return {
+    ...selection,
+    quantities,
+    previewItems: priced.items!,
+    total: priced.total!,
+    options: selection.candidates.map(({ promotion }) => ({
+      id: promotion.id, promotion,
+      selectedQuantity: quantities[promotion.id] ?? 0,
+      maxQuantity: limits[promotion.id],
+    })),
+  };
+}
+
+function buildSelection(items: CartItem[], candidates: ComboCandidate[], inputKey: string): ComboSelection {
+  return updateSelectionPreview({
+    revision: ++selectionRevision, inputKey, availableItems: items, candidates,
+    quantities: {}, options: [], previewItems: [], total: 0,
+  }, {})!;
+}
+
+function recalculateAndSetState(items: CartItem[], autoApplyPromos: boolean): Partial<CartState> {
+  if (!autoApplyPromos) {
+    return { ...priceCart(items, false), comboSelection: null, comboInputKey: "", comboConfirmedKey: "" };
+  }
+  if (!useProductsStore.getState().hydrated) return { items, comboSelection: null };
+  const confirmedKey = confirmedSelectionKey(items);
+  // An explicit confirmation includes leaving eligible products outside combos.
+  // Preserve that decision on unrelated edits, hydration and price recalculation.
+  if (useCartStore.getState().comboConfirmedKey === confirmedKey) {
+    const priced = priceCart(items, true);
+    return { ...priced, comboSelection: null, comboInputKey: selectionInputKey(priced.items!) };
+  }
+  const available = expandAutomaticBundles(items);
+  const candidates = findComboCandidates(available, getPromotions());
+  if (candidates.length < 2) {
+    const result = candidates.length === 1
+      ? applyCandidate(available, candidates[0], choiceKey(available, candidates, candidates[0].promotion.id))
+      : available;
+    const priced = priceCart(result, true);
+    return { ...priced, comboSelection: null, comboInputKey: selectionInputKey(priced.items!),
+      comboConfirmedKey: confirmedSelectionKey(priced.items!) };
+  }
+  // Dialog quantities only change the preview. The live purchase remains intact.
+  const live = priceCart(items, true);
+  const inputKey = selectionInputKey(live.items!);
+  return { ...live, comboInputKey: inputKey, comboSelection: buildSelection(available, candidates, inputKey) };
+}
 export const useCartStore = create(
-  persist<CartState>(
+  persist<CartState, [], [], Omit<CartState, "comboSelection" | "comboInputKey">>(
     (set, get) => ({
       items: [],
       subtotal: 0,
@@ -477,11 +424,48 @@ export const useCartStore = create(
       originalOrder: null,
       editSellerSlug: null,
       autoApplyPromos: true,
+      comboSelection: null,
+      comboInputKey: "",
+      comboConfirmedKey: "",
 
       toggleAutoApplyPromos: () => {
         const newStatus = !get().autoApplyPromos;
-        set({ autoApplyPromos: newStatus });
-        set(recalculateAndSetState(get().items, newStatus));
+        set({ ...recalculateAndSetState(get().items, newStatus), autoApplyPromos: newStatus });
+      },
+
+      cancelComboSelection: () => {
+        set({ ...recalculateAndSetState(get().items, false), autoApplyPromos: false });
+      },
+
+      updateComboSelectionQuantity: (id, quantity, revision) => {
+        const state = get();
+        const selection = state.comboSelection;
+        if (!selection || selection.revision !== revision) return;
+        if (selection.inputKey !== selectionInputKey(state.items)) {
+          set(recalculateAndSetState(state.items, state.autoApplyPromos));
+          return;
+        }
+        const option = selection.options.find((option) => option.id === id);
+        if (!option || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > option.maxQuantity) return;
+        const updated = updateSelectionPreview(selection, { ...selection.quantities, [id]: quantity });
+        if (updated) set({ comboSelection: updated });
+      },
+
+      applyComboSelection: (revision) => {
+        const state = get();
+        const selection = state.comboSelection;
+        if (!selection || selection.revision !== revision) return;
+        if (selection.inputKey !== selectionInputKey(state.items)) {
+          set(recalculateAndSetState(state.items, state.autoApplyPromos));
+          return;
+        }
+        const updated = updateSelectionPreview(selection, selection.quantities);
+        if (!updated) return;
+        // Commit precisely these quantities, including an intentional all-zero
+        // selection. Do not run discovery or auto-apply leftover offers here.
+        const priced = priceCart(updated.previewItems, true);
+        set({ ...priced, comboSelection: null, comboInputKey: selectionInputKey(priced.items!),
+          comboConfirmedKey: confirmedSelectionKey(priced.items!) });
       },
 
       getOrderForEdit: () => {
@@ -533,6 +517,7 @@ export const useCartStore = create(
           mode: "editing",
           editSellerSlug: sellerSlug ?? null,
           autoApplyPromos: order.autoApplyPromos ?? true,
+          comboConfirmedKey: "",
         });
         set(recalculateAndSetState(loadedItems, get().autoApplyPromos));
       },
@@ -546,7 +531,7 @@ export const useCartStore = create(
         console.log("Quantities to add:", quantitiesObject);
         // ================================================================
 
-        let updatedItems = [...get().items];
+        let updatedItems = get().items.map((item) => ({ ...item }));
         quantities.forEach((quantity, variantId) => {
           if (quantity > 0) {
             const variant = parentProduct.variants?.find(
@@ -589,7 +574,7 @@ export const useCartStore = create(
 
       setItemManualPricePerUnit: (itemId, price) => {
         const updatedItems = get().items.map((item) =>
-          item.id === itemId
+          (item.cartLineKey ?? item.id) === itemId
             ? {
                 // When a manual price is set, clear other manual overrides
                 ...item,
@@ -644,24 +629,31 @@ export const useCartStore = create(
         }
 
         const existingIndex = currentItems.findIndex(
-          (item) => item.isPromo && item.id === promotion.id
+          (item) => item.isPromo && !isAutomaticBundle(item) &&
+            (item.promoId ?? item.id) === promotion.id &&
+            JSON.stringify(item.includedItems?.map((included) => [included.id, included.quantity])) ===
+              JSON.stringify(includedItems.map((included) => [included.id, included.quantity]))
         );
 
         if (existingIndex > -1) {
           currentItems[existingIndex] = {
             ...currentItems[existingIndex],
             quantity: currentItems[existingIndex].quantity + qty,
-            includedItems,
+            comboSource: "explicit",
           };
         } else {
+          let bundleId = promotion.id;
+          while (currentItems.some((item) => item.id === bundleId)) bundleId += ":explicit";
           currentItems.push({
-            id: promotion.id,
+            id: bundleId,
+            promoId: promotion.id,
             name: promotion.title,
             brand: "Promoción",
             priceTiers: [],
             imageUrls: [],
             quantity: qty,
             isPromo: true,
+            comboSource: "explicit",
             customTotal: promotion.totalPrice,
             includedItems,
             finalPrice: promotion.totalPrice,
@@ -677,20 +669,20 @@ export const useCartStore = create(
       updateQuantity: (itemId, quantity) => {
         const updatedItems = get()
           .items.map((item) =>
-            item.id === itemId ? { ...item, quantity } : item
+            (item.cartLineKey ?? item.id) === itemId ? { ...item, quantity } : item
           )
           .filter((item) => item.quantity > 0);
         set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
       },
 
       removeFromCart: (itemId) => {
-        const updatedItems = get().items.filter((item) => item.id !== itemId);
+        const updatedItems = get().items.filter((item) => (item.cartLineKey ?? item.id) !== itemId);
         set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
       },
 
       setItemManualDiscountPercentage: (itemId, percentage) => {
         const updatedItems = get().items.map((item) =>
-          item.id === itemId
+          (item.cartLineKey ?? item.id) === itemId
             ? { ...item, manualPercentage: percentage ?? 0, manualTotal: null }
             : item
         );
@@ -699,7 +691,7 @@ export const useCartStore = create(
 
       setItemManualTotal: (itemId, total) => {
         const updatedItems = get().items.map((item) =>
-          item.id === itemId
+          (item.cartLineKey ?? item.id) === itemId
             ? { ...item, manualTotal: total, manualPercentage: 0 }
             : item
         );
@@ -715,12 +707,26 @@ export const useCartStore = create(
           mode: "creating",
           originalOrder: null,
           editSellerSlug: null,
+          comboSelection: null,
+          comboInputKey: "",
+          comboConfirmedKey: "",
         });
       },
     }),
     {
       name: "suvanza-cart-storage",
       storage: createJSONStorage(() => localStorage),
+      // A dialog is temporary. Keep the existing cart persistence format and
+      // never save unconfirmed choices or snapshots of the catalog.
+      partialize: ({ comboSelection, comboInputKey, ...state }) => state,
     }
   )
 );
+
+useProductsStore.subscribe((catalog, previous) => {
+  if (!catalog.hydrated || (catalog.products === previous.products && catalog.promotions === previous.promotions)) return;
+  const cart = useCartStore.getState();
+  if (cart.items.length && cart.autoApplyPromos && cart.comboInputKey !== selectionInputKey(cart.items)) {
+    useCartStore.setState(recalculateAndSetState(cart.items, true));
+  }
+});

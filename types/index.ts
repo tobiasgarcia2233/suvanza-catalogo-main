@@ -41,6 +41,10 @@ export interface CartItem extends Product {
   isPromo?: boolean;
   includedItems?: CartItem[];
   manualPricePerUnit?: number | null;
+  // Automatic regrouping is distinct from explicitly purchasing a bundle.
+  comboSource?: "automatic" | "explicit";
+  comboChoiceKey?: string;
+  cartLineKey?: string;
 }
 
 export type PaymentMethod =
@@ -111,5 +115,6 @@ export interface CrossPromotion {
     pricePerUnit: number;
     notes?: string;
     matchBy?: string;
+    brand?: string;
   }[];
 }

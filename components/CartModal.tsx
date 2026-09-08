@@ -9,6 +9,7 @@ import { CartItem } from "./CartItem";
 import { CartFooter } from "./CartFooter";
 import { QuickAddModal } from "./QuickAddModal";
 import { useProductsStore } from "@/store/productsStore";
+import { ComboSelectionDialog } from "./ComboSelectionDialog";
 
 export function CartModal() {
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -110,7 +111,7 @@ export function CartModal() {
               <>
                 <div className="flex-grow py-4 overflow-y-auto">
                   {items.map((item) => (
-                    <CartItem key={item.id} item={item} />
+                    <CartItem key={item.cartLineKey ?? item.id} item={item} />
                   ))}
                   <button
                     onClick={() => setIsQuickAddOpen(true)}
@@ -132,6 +133,7 @@ export function CartModal() {
         onClose={() => setIsQuickAddOpen(false)}
         products={products}
       />
+      <ComboSelectionDialog />
     </>
   );
 }

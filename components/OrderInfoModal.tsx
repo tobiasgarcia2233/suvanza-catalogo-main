@@ -75,6 +75,7 @@ export function OrderInfoModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (useCartStore.getState().comboSelection) return;
     if (!buyerName || !buyerDni || !buyerPhone) {
       setError("Por favor, complete todos los campos.");
       return;
@@ -90,7 +91,13 @@ export function OrderInfoModal({
         id: String(item.promoId ?? item.id),
         title: item.name,
         quantity: item.quantity,
-      }));
+      }))
+      .reduce((promos, promo) => {
+        const existing = promos.find((entry) => entry.id === promo.id);
+        if (existing) existing.quantity += promo.quantity;
+        else promos.push(promo);
+        return promos;
+      }, []);
 
     // ====================== PAYLOAD BUILDER LOGIC START ======================
     // This logic "unrolls" promos into their constituent items for the backend.
