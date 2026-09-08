@@ -56,6 +56,35 @@ export async function findOrCreateCategory(name: string): Promise<Category> {
   return { id, name: trimmed };
 }
 
+export async function renameCategory(id: string, name: string): Promise<Category> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("El nombre de la categoría no puede estar vacío.");
+
+  const clash = await db.execute({
+    sql: "SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id <> ?",
+    args: [trimmed, id],
+  });
+  if (clash.rows.length > 0) {
+    throw new Error(`Ya existe una categoría llamada "${trimmed}".`);
+  }
+
+  const res = await db.execute({
+    sql: "UPDATE categories SET name = ? WHERE id = ?",
+    args: [trimmed, id],
+  });
+  if (res.rowsAffected === 0) throw new Error("La categoría no existe.");
+
+  return { id, name: trimmed };
+}
+
 export async function deleteCategory(id: string): Promise<void> {
-  await db.execute({ sql: "DELETE FROM categories WHERE id = ?", args: [id] });
+  // Explicitly unlink from every product first (don't rely on FK cascade being
+  // enabled on the connection); no product is deleted, they just lose the tag.
+  await db.batch(
+    [
+      { sql: "DELETE FROM product_categories WHERE category_id = ?", args: [id] },
+      { sql: "DELETE FROM categories WHERE id = ?", args: [id] },
+    ],
+    "write",
+  );
 }

@@ -7,7 +7,8 @@ import ImageUpload from "./ImageUpload";
 import PriceTiersEditor from "./PriceTiersEditor";
 import SearchBox from "./SearchBox";
 import Combobox from "./Combobox";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import CategoryManager from "./CategoryManager";
+import { Plus, Trash2, Loader2, X } from "lucide-react";
 import { useMemo } from "react";
 
 function emptyVariant(): Variant {
@@ -18,7 +19,7 @@ type FormState = {
   id: string;
   brand: string;
   name: string;
-  category: string;
+  categories: string[];
   imageUrls: string[];
   priceTiers: Product["priceTiers"];
   variants: Variant[];
@@ -37,7 +38,7 @@ function initial(product?: Product): FormState {
     id: product ? String(product.id) : "",
     brand: product?.brand ?? "",
     name: product?.name ?? "",
-    category: product?.categoryName ?? "",
+    categories: product?.categoryNames ?? [],
     imageUrls: product?.imageUrls ?? [],
     priceTiers: product?.priceTiers ?? [],
     variants: variants.length > 0 ? variants : [emptyVariant()],
@@ -57,13 +58,22 @@ export default function ProductForm({
   const router = useRouter();
   const isEdit = !!product;
   const [state, setState] = useState<FormState>(initial(product));
+  const [cats, setCats] = useState<Category[]>(categories);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoQuery, setPromoQuery] = useState("");
 
   const categoryOptions = useMemo(
-    () => categories.map((c) => ({ value: c.name, label: c.name })),
-    [categories],
+    () =>
+      cats
+        .filter(
+          (c) =>
+            !state.categories.some(
+              (sel) => sel.toLowerCase() === c.name.toLowerCase(),
+            ),
+        )
+        .map((c) => ({ value: c.name, label: c.name })),
+    [cats, state.categories],
   );
 
   const filteredPromotions = useMemo(() => {
@@ -96,6 +106,21 @@ export default function ProductForm({
       return { ...s, variants: s.variants.filter((_, idx) => idx !== i) };
     });
   }
+  function addCategory(name: string) {
+    const n = name.trim();
+    if (!n) return;
+    setState((s) =>
+      s.categories.some((c) => c.toLowerCase() === n.toLowerCase())
+        ? s
+        : { ...s, categories: [...s.categories, n] },
+    );
+  }
+  function removeCategory(name: string) {
+    setState((s) => ({
+      ...s,
+      categories: s.categories.filter((c) => c !== name),
+    }));
+  }
   function togglePromotion(id: string) {
     setState((s) => ({
       ...s,
@@ -114,7 +139,7 @@ export default function ProductForm({
         id: state.id || undefined,
         brand: state.brand.trim() || null,
         name: state.name.trim(),
-        category: state.category.trim() || null,
+        categories: state.categories,
         imageUrls: state.imageUrls,
         priceTiers: state.priceTiers,
         variants: state.variants,
@@ -184,16 +209,54 @@ export default function ProductForm({
               className="rounded border border-gray-300 px-3 py-2"
             />
           </label>
-          <label className="flex flex-col text-sm">
-            <span className="text-gray-600">Categoría</span>
-            <Combobox
-              value={state.category}
-              options={categoryOptions}
-              placeholder="— Elegir o escribir una nueva —"
-              customLabel="categoría nueva"
-              onChange={(next) => setField("category", next)}
+          <div className="flex flex-col gap-3 text-sm sm:col-span-2">
+            <div className="flex flex-col text-sm sm:max-w-xs">
+              <span className="text-gray-600">Categorías</span>
+              <Combobox
+                value=""
+                options={categoryOptions}
+                placeholder="— Agregar categoría —"
+                customLabel="categoría nueva"
+                onChange={(next) => addCategory(next)}
+              />
+            </div>
+            {state.categories.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {state.categories.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full bg-gray-900 py-1 pl-3 pr-1.5 text-xs font-medium text-white"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(name)}
+                      className="rounded-full p-0.5 hover:bg-white/20"
+                      aria-label={`Quitar ${name}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <CategoryManager
+              categories={cats}
+              onChange={setCats}
+              onCategoryRenamed={(prev, next) =>
+                setState((s) => ({
+                  ...s,
+                  categories: s.categories.map((c) => (c === prev ? next : c)),
+                }))
+              }
+              onCategoryDeleted={(name) =>
+                setState((s) => ({
+                  ...s,
+                  categories: s.categories.filter((c) => c !== name),
+                }))
+              }
             />
-          </label>
+          </div>
         </div>
       </section>
 

@@ -39,7 +39,7 @@ export default function SellerPageClient({
   const filteredProducts = useMemo(
     () =>
       selectedCategory
-        ? products.filter((p) => p.categoryId === selectedCategory)
+        ? products.filter((p) => p.categoryIds?.includes(selectedCategory))
         : products,
     [products, selectedCategory],
   );

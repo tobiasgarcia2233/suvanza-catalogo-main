@@ -16,7 +16,7 @@ export default function ProductsTable({ products }: { products: Product[] }) {
       const hay = [
         p.name,
         p.brand ?? "",
-        p.categoryName ?? "",
+        (p.categoryNames ?? []).join(" "),
         ...(p.variants?.map((v) => v.name) ?? []),
       ]
         .join(" ")
@@ -66,7 +66,9 @@ export default function ProductsTable({ products }: { products: Product[] }) {
                   <td className="py-2 px-4 font-medium">{p.name}</td>
                   <td className="py-2 px-4 text-gray-600">{p.brand ?? "—"}</td>
                   <td className="py-2 px-4 text-gray-600">
-                    {p.categoryName ?? "—"}
+                    {p.categoryNames && p.categoryNames.length > 0
+                      ? p.categoryNames.join(", ")
+                      : "—"}
                   </td>
                   <td className="py-2 px-4 text-gray-600">
                     {p.variants?.length ?? 0}
