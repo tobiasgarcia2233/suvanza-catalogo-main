@@ -11,7 +11,34 @@ import {
   Variant,
   Order,
 } from "@/types";
-import { getProducts, getPromotions } from "@/store/productsStore";
+import { getProducts, getPromotions, useProductsStore } from "@/store/productsStore";
+import {
+  getAvailableCombos, preserveComboAdjustments,
+  allocateComboSelection, selectionLimits, isAutomaticBundle,
+  type ComboCandidate,
+} from "@/lib/comboSelection";
+
+export interface ComboOption {
+  id: string;
+  promotion: CrossPromotion;
+  selectedQuantity: number;
+  maxQuantity: number;
+}
+
+interface ComboSelection {
+  revision: number;
+  inputKey: string;
+  options: ComboOption[];
+  availableItems: CartItem[];
+  originalItems: CartItem[];
+  candidates: ComboCandidate[];
+  quantities: Record<string, number>;
+  previewItems: CartItem[];
+  total: number;
+  applyLimitation: string | null;
+}
+
+let selectionRevision = 0;
 
 export interface DiscountDetail {
   id: string;
@@ -78,20 +105,25 @@ interface CartState {
     itemId: string | number,
     price: number | null
   ) => void;
-  autoApplyPromos: boolean;
-  toggleAutoApplyPromos: () => void;
+  evaluateCombos: () => void;
+  removeCombos: () => void;
+  comboNotice: string | null;
+  comboSelection: ComboSelection | null;
+  updateComboSelectionQuantity: (id: string, quantity: number, revision: number) => void;
+  applyComboSelection: (revision: number) => void;
+  cancelComboSelection: () => void;
 }
 
-function recalculateAndSetState(
+export function priceCart(
   items: CartItem[],
-  autoApplyPromos: boolean
-): Partial<CartState> {
+  keepCombos: boolean
+): Pick<CartState, "items" | "subtotal" | "total" | "discountDetails"> {
   let finalTotal = 0;
   let finalSubtotal = 0;
   const finalDiscountDetails: DiscountDetail[] = [];
   let processedItems = [...items];
 
-  if (!autoApplyPromos) {
+  if (!keepCombos) {
     const flattenedItems = items.flatMap((item) =>
       item.isPromo && item.includedItems
         ? item.includedItems.map((included) => ({
@@ -112,167 +144,6 @@ function recalculateAndSetState(
     processedItems = Array.from(mergedItems.values());
   }
 
-  if (autoApplyPromos) {
-    while (true) {
-      let promoSwappedThisIteration = false;
-      const looseItems = processedItems.filter((item) => !item.isPromo);
-      const brandQuantities = new Map<string, number>();
-      const idQuantities = new Map<string | number, number>();
-      looseItems.forEach((item) => {
-        idQuantities.set(
-          item.id,
-          (idQuantities.get(item.id) || 0) + item.quantity
-        );
-        if (item.brand) {
-          brandQuantities.set(
-            item.brand,
-            (brandQuantities.get(item.brand) || 0) + item.quantity
-          );
-        }
-      });
-      for (const promo of getPromotions()) {
-        const promoAlreadyInCart = processedItems.some(
-          (item) => item.id === promo.id
-        );
-        if (promoAlreadyInCart) {
-          continue;
-        }
-        const canApplyPromo = promo.items.every((promoItem) => {
-          if (promoItem.matchBy === "brand") {
-            return (
-              (brandQuantities.get(promoItem.id) || 0) >= promoItem.quantity
-            );
-          } else if (promoItem.matchBy === "nameContains") {
-            const totalMatchingQuantity = looseItems
-              .filter(
-                (item) =>
-                  item.brand === promoItem.brand &&
-                  item.name.includes(promoItem.id as string)
-              )
-              .reduce((sum, item) => sum + item.quantity, 0);
-            return totalMatchingQuantity >= promoItem.quantity;
-          } else {
-            return (idQuantities.get(promoItem.id) || 0) >= promoItem.quantity;
-          }
-        });
-        if (canApplyPromo) {
-          promoSwappedThisIteration = true;
-          let tempLooseItems = [...looseItems];
-          const consumedVariantsForManifest: CartItem[] = [];
-          promo.items.forEach((promoItem) => {
-            let quantityToConsume = promoItem.quantity;
-            const remainingItems: CartItem[] = [];
-            if (promoItem.matchBy === "brand") {
-              const itemsOfBrand = tempLooseItems.filter(
-                (i) => i.brand === promoItem.id
-              );
-              const otherItems = tempLooseItems.filter(
-                (i) => i.brand !== promoItem.id
-              );
-              for (const item of itemsOfBrand) {
-                if (quantityToConsume <= 0) {
-                  remainingItems.push(item);
-                  continue;
-                }
-                const amountToTake = Math.min(item.quantity, quantityToConsume);
-                consumedVariantsForManifest.push({
-                  ...item,
-                  quantity: amountToTake,
-                });
-                quantityToConsume -= amountToTake;
-                if (item.quantity > amountToTake) {
-                  remainingItems.push({
-                    ...item,
-                    quantity: item.quantity - amountToTake,
-                  });
-                }
-              }
-              tempLooseItems = [...otherItems, ...remainingItems];
-            } else if (promoItem.matchBy === "nameContains") {
-              const itemsToProcess = tempLooseItems.filter(
-                (item) =>
-                  item.brand === promoItem.brand &&
-                  item.name.includes(promoItem.id as string)
-              );
-              const otherItems = tempLooseItems.filter(
-                (item) => !itemsToProcess.includes(item)
-              );
-              for (const item of itemsToProcess) {
-                if (quantityToConsume <= 0) {
-                  remainingItems.push(item);
-                  continue;
-                }
-                const amountToTake = Math.min(item.quantity, quantityToConsume);
-                consumedVariantsForManifest.push({
-                  ...item,
-                  quantity: amountToTake,
-                });
-                quantityToConsume -= amountToTake;
-                if (item.quantity > amountToTake) {
-                  remainingItems.push({
-                    ...item,
-                    quantity: item.quantity - amountToTake,
-                  });
-                }
-              }
-              tempLooseItems = [...otherItems, ...remainingItems];
-            } else {
-              const itemsToProcess = tempLooseItems.filter(
-                (i) => i.id === promoItem.id
-              );
-              const otherItems = tempLooseItems.filter(
-                (i) => i.id !== promoItem.id
-              );
-              for (const item of itemsToProcess) {
-                if (quantityToConsume <= 0) {
-                  remainingItems.push(item);
-                  continue;
-                }
-                const amountToTake = Math.min(item.quantity, quantityToConsume);
-                consumedVariantsForManifest.push({
-                  ...item,
-                  quantity: amountToTake,
-                });
-                quantityToConsume -= amountToTake;
-                if (item.quantity > amountToTake) {
-                  remainingItems.push({
-                    ...item,
-                    quantity: item.quantity - amountToTake,
-                  });
-                }
-              }
-              tempLooseItems = [...otherItems, ...remainingItems];
-            }
-          });
-          const promoCartItem: CartItem = {
-            id: promo.id,
-            name: promo.title,
-            brand: "Promoción",
-            priceTiers: [],
-            imageUrls: [],
-            quantity: 1,
-            isPromo: true,
-            customTotal: promo.totalPrice,
-            includedItems: consumedVariantsForManifest,
-            finalPrice: promo.totalPrice,
-            discountPercentage: 0,
-            manualTotal: null,
-            manualPercentage: 0,
-          };
-          processedItems = [
-            ...processedItems.filter((item) => item.isPromo),
-            ...tempLooseItems,
-            promoCartItem,
-          ];
-          break;
-        }
-      }
-      if (!promoSwappedThisIteration) {
-        break;
-      }
-    }
-  }
-
   const brandTotalQuantities = new Map<string, number>();
   processedItems.forEach((item) => {
     if (!item.isPromo && item.brand) {
@@ -285,7 +156,7 @@ function recalculateAndSetState(
 
   processedItems.forEach((item) => {
     if (item.isPromo) {
-      const promoDefinition = getPromotions().find((p) => p.id === item.id);
+      const promoDefinition = getPromotions().find((p) => p.id === (item.promoId ?? item.id));
       const basePromoPrice = promoDefinition
         ? promoDefinition.totalPrice
         : item.customTotal ?? 0;
@@ -394,7 +265,7 @@ function recalculateAndSetState(
 
   const finalCartItems = processedItems.map((item) => {
     if (item.isPromo) {
-      const promoDefinition = getPromotions().find((p) => p.id === item.id);
+      const promoDefinition = getPromotions().find((p) => p.id === (item.promoId ?? item.id));
       const basePromoPrice = promoDefinition
         ? promoDefinition.totalPrice
         : item.customTotal ?? 0;
@@ -459,15 +330,71 @@ function recalculateAndSetState(
   });
 
   return {
-    items: finalCartItems,
+    items: finalCartItems.map((item, index) => ({
+      ...item,
+      // Distinct manual adjustments may leave two lines for the same variant.
+      // Keep its product ID intact, but let the UI edit each line separately.
+      cartLineKey: finalCartItems.some((other, otherIndex) => otherIndex !== index && other.id === item.id)
+        ? `line:${item.id}:${index}` : undefined,
+    })),
     subtotal: finalSubtotal,
     total: finalTotal,
     discountDetails: finalDiscountDetails,
   };
 }
 
+function selectionInputKey(items: CartItem[]): string {
+  const purchase = (item: CartItem): unknown => ({
+    id: item.id, quantity: item.quantity, name: item.name, brand: item.brand,
+    priceTiers: item.priceTiers, isPromo: item.isPromo, promoId: item.promoId,
+    comboSource: item.comboSource, comboChoiceKey: item.comboChoiceKey,
+    manualPercentage: item.manualPercentage, manualPricePerUnit: item.manualPricePerUnit,
+    manualTotal: item.manualTotal, includedItems: item.includedItems?.map(purchase),
+  });
+  return JSON.stringify([items.map(purchase), getProducts(), getPromotions()]);
+}
+
+function updateSelectionPreview(selection: ComboSelection, quantities: Record<string, number>): ComboSelection | null {
+  const allocated = allocateComboSelection(selection.availableItems,
+    selection.candidates.map((candidate) => candidate.promotion), quantities);
+  if (!allocated) return null;
+  const limits = selectionLimits(selection.availableItems, selection.candidates, quantities);
+  const protectedSelection = preserveComboAdjustments(allocated, selection.originalItems);
+  const priced = priceCart(protectedSelection.items, true);
+  return {
+    ...selection,
+    quantities,
+    previewItems: priced.items!,
+    total: priced.total!,
+    applyLimitation: protectedSelection.limitation,
+    options: selection.candidates.map(({ promotion }) => ({
+      id: promotion.id, promotion,
+      selectedQuantity: quantities[promotion.id] ?? 0,
+      maxQuantity: limits[promotion.id],
+    })),
+  };
+}
+
+function buildSelection(items: CartItem[], candidates: ComboCandidate[], originalItems: CartItem[]): ComboSelection {
+  return updateSelectionPreview({
+    revision: ++selectionRevision, inputKey: selectionInputKey(originalItems), availableItems: items, candidates, originalItems,
+    quantities: {}, options: [], previewItems: [], total: 0, applyLimitation: null,
+  }, {})!;
+}
+
+// Only a changed purchase invalidates the preview; committing an unchanged
+// input (for example on blur) must not dismiss the dialog.
+// Combo discovery and application are exclusively explicit vendor actions.
+function recalculateAndSetState(items: CartItem[]): Partial<CartState> {
+  const selection = useCartStore.getState().comboSelection;
+  return {
+    ...priceCart(items, true),
+    comboSelection: selection?.inputKey === selectionInputKey(items) ? selection : null,
+    comboNotice: null,
+  };
+}
 export const useCartStore = create(
-  persist<CartState>(
+  persist<CartState, [], [], Omit<CartState, "comboSelection" | "comboNotice">>(
     (set, get) => ({
       items: [],
       subtotal: 0,
@@ -476,12 +403,77 @@ export const useCartStore = create(
       mode: "creating",
       originalOrder: null,
       editSellerSlug: null,
-      autoApplyPromos: true,
+      comboSelection: null,
+      comboNotice: null,
 
-      toggleAutoApplyPromos: () => {
-        const newStatus = !get().autoApplyPromos;
-        set({ autoApplyPromos: newStatus });
-        set(recalculateAndSetState(get().items, newStatus));
+      evaluateCombos: () => {
+        if (!useProductsStore.getState().hydrated) return;
+        const state = get();
+        const { availableItems, candidates, limitation } = getAvailableCombos(state.items, getPromotions());
+        if (!availableItems || !candidates.length) {
+          set({ comboSelection: null, comboNotice: limitation });
+          return;
+        }
+        if (candidates.length === 1) {
+          const candidate = candidates[0];
+          const allocated = allocateComboSelection(availableItems, [candidate.promotion], {
+            [candidate.promotion.id]: candidate.repetitions,
+          });
+          if (allocated) {
+            const protectedSelection = preserveComboAdjustments(allocated, state.items);
+            if (protectedSelection.limitation) set({ comboNotice: protectedSelection.limitation });
+            else set({ ...recalculateAndSetState(protectedSelection.items), comboSelection: null });
+          }
+          return;
+        }
+        // Opening previews a complete regrouping without touching the purchase.
+        set({ comboSelection: buildSelection(availableItems, candidates, state.items), comboNotice: null });
+      },
+
+      removeCombos: () => {
+        const items = get().items;
+        if (!items.some((item) => item.isPromo)) return;
+        const { limitation } = getAvailableCombos(items, []);
+        if (limitation) {
+          set({ comboNotice: limitation });
+          return;
+        }
+        // Reuse the old toggle-off pricing, including variant merging and the
+        // existing removal of bundle-level (not constituent) manual adjustments.
+        set({ ...priceCart(items, false), comboSelection: null, comboNotice: null });
+      },
+
+      cancelComboSelection: () => {
+        set({ comboSelection: null });
+      },
+
+      updateComboSelectionQuantity: (id, quantity, revision) => {
+        const state = get();
+        const selection = state.comboSelection;
+        if (!selection || selection.revision !== revision) return;
+        if (selection.inputKey !== selectionInputKey(state.items)) {
+          set({ comboSelection: null });
+          return;
+        }
+        const option = selection.options.find((option) => option.id === id);
+        if (!option || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > option.maxQuantity) return;
+        const updated = updateSelectionPreview(selection, { ...selection.quantities, [id]: quantity });
+        if (updated) set({ comboSelection: updated });
+      },
+
+      applyComboSelection: (revision) => {
+        const state = get();
+        const selection = state.comboSelection;
+        if (!selection || selection.revision !== revision) return;
+        if (selection.inputKey !== selectionInputKey(state.items)) {
+          set({ comboSelection: null });
+          return;
+        }
+        if (!Object.values(selection.quantities).some((quantity) => quantity > 0)) return;
+        const updated = updateSelectionPreview(selection, selection.quantities);
+        if (!updated || updated.applyLimitation) return;
+        // Commit exactly the confirmed allocation; never discover more combos.
+        set({ ...recalculateAndSetState(updated.previewItems), comboSelection: null });
       },
 
       getOrderForEdit: () => {
@@ -532,9 +524,8 @@ export const useCartStore = create(
           originalOrder: order,
           mode: "editing",
           editSellerSlug: sellerSlug ?? null,
-          autoApplyPromos: order.autoApplyPromos ?? true,
         });
-        set(recalculateAndSetState(loadedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(loadedItems));
       },
 
       addMultipleToCart: (parentProduct, quantities) => {
@@ -546,7 +537,7 @@ export const useCartStore = create(
         console.log("Quantities to add:", quantitiesObject);
         // ================================================================
 
-        let updatedItems = [...get().items];
+        let updatedItems = get().items.map((item) => ({ ...item }));
         quantities.forEach((quantity, variantId) => {
           if (quantity > 0) {
             const variant = parentProduct.variants?.find(
@@ -584,12 +575,12 @@ export const useCartStore = create(
             }
           }
         });
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       setItemManualPricePerUnit: (itemId, price) => {
         const updatedItems = get().items.map((item) =>
-          item.id === itemId
+          (item.cartLineKey ?? item.id) === itemId
             ? {
                 // When a manual price is set, clear other manual overrides
                 ...item,
@@ -599,7 +590,7 @@ export const useCartStore = create(
               }
             : item
         );
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       addCrossPromotionToCart: (
@@ -644,24 +635,31 @@ export const useCartStore = create(
         }
 
         const existingIndex = currentItems.findIndex(
-          (item) => item.isPromo && item.id === promotion.id
+          (item) => item.isPromo && !isAutomaticBundle(item) &&
+            (item.promoId ?? item.id) === promotion.id &&
+            JSON.stringify(item.includedItems?.map((included) => [included.id, included.quantity])) ===
+              JSON.stringify(includedItems.map((included) => [included.id, included.quantity]))
         );
 
         if (existingIndex > -1) {
           currentItems[existingIndex] = {
             ...currentItems[existingIndex],
             quantity: currentItems[existingIndex].quantity + qty,
-            includedItems,
+            comboSource: "explicit",
           };
         } else {
+          let bundleId = promotion.id;
+          while (currentItems.some((item) => item.id === bundleId)) bundleId += ":explicit";
           currentItems.push({
-            id: promotion.id,
+            id: bundleId,
+            promoId: promotion.id,
             name: promotion.title,
             brand: "Promoción",
             priceTiers: [],
             imageUrls: [],
             quantity: qty,
             isPromo: true,
+            comboSource: "explicit",
             customTotal: promotion.totalPrice,
             includedItems,
             finalPrice: promotion.totalPrice,
@@ -671,39 +669,39 @@ export const useCartStore = create(
           });
         }
 
-        set(recalculateAndSetState(currentItems, get().autoApplyPromos));
+        set(recalculateAndSetState(currentItems));
       },
 
       updateQuantity: (itemId, quantity) => {
         const updatedItems = get()
           .items.map((item) =>
-            item.id === itemId ? { ...item, quantity } : item
+            (item.cartLineKey ?? item.id) === itemId ? { ...item, quantity } : item
           )
           .filter((item) => item.quantity > 0);
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       removeFromCart: (itemId) => {
-        const updatedItems = get().items.filter((item) => item.id !== itemId);
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        const updatedItems = get().items.filter((item) => (item.cartLineKey ?? item.id) !== itemId);
+        set(recalculateAndSetState(updatedItems));
       },
 
       setItemManualDiscountPercentage: (itemId, percentage) => {
         const updatedItems = get().items.map((item) =>
-          item.id === itemId
+          (item.cartLineKey ?? item.id) === itemId
             ? { ...item, manualPercentage: percentage ?? 0, manualTotal: null }
             : item
         );
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       setItemManualTotal: (itemId, total) => {
         const updatedItems = get().items.map((item) =>
-          item.id === itemId
+          (item.cartLineKey ?? item.id) === itemId
             ? { ...item, manualTotal: total, manualPercentage: 0 }
             : item
         );
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       clearCart: () => {
@@ -715,12 +713,44 @@ export const useCartStore = create(
           mode: "creating",
           originalOrder: null,
           editSellerSlug: null,
+          comboSelection: null,
+          comboNotice: null,
         });
       },
     }),
     {
       name: "suvanza-cart-storage",
       storage: createJSONStorage(() => localStorage),
+      // A dialog is temporary. Keep the existing cart persistence format and
+      // never save unconfirmed choices or snapshots of the catalog.
+      partialize: ({ comboSelection, comboNotice, ...state }) => state,
+      merge: (persisted, current) => {
+        // Ignore legacy toggle/confirmation flags and never restore a dialog.
+        const { autoApplyPromos, comboConfirmedKey, comboInputKey, comboSelection, comboNotice, ...purchase } = persisted ?? {};
+        return { ...current, ...purchase, comboSelection: null, comboNotice: null };
+      },
     }
   )
 );
+
+useProductsStore.subscribe((catalog, previous) => {
+  if (!catalog.hydrated || (catalog.products === previous.products && catalog.promotions === previous.promotions)) return;
+  // RSC refreshes / repeated hydration can supply new arrays with identical
+  // contents. Reference changes alone must not reprice or dismiss a selection.
+  if (JSON.stringify([catalog.products, catalog.promotions]) ===
+    JSON.stringify([previous.products, previous.promotions])) return;
+  const cart = useCartStore.getState();
+  if (!cart.items.length) return;
+  const priced = priceCart(cart.items, true);
+  let selection = cart.comboSelection;
+  if (selection) {
+    const { availableItems, candidates } = getAvailableCombos(priced.items, catalog.promotions);
+    // Refresh an already-open preview in place, retaining its revision and
+    // chosen counts. Close only if those counts can no longer be allocated.
+    selection = availableItems && candidates.length ? updateSelectionPreview({
+      ...selection, availableItems, candidates, originalItems: priced.items,
+      inputKey: selectionInputKey(priced.items),
+    }, selection.quantities) : null;
+  }
+  useCartStore.setState({ ...priced, comboSelection: selection, comboNotice: null });
+});

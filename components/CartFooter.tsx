@@ -4,7 +4,7 @@ import { useCartStore } from "@/store/cartStore";
 import { useUIStore } from "@/store/uiStore";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PromoToggle } from "./PromoToggle";
+import { ComboActions } from "./ComboActions";
 
 export function CartFooter() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export function CartFooter() {
     originalOrder,
     editSellerSlug,
     items,
-    autoApplyPromos,
+    comboSelection,
   } = useCartStore();
   const { openOrderInfoModal, closeCart } = useUIStore();
   const totalDiscount = subtotal - total;
@@ -31,7 +31,7 @@ export function CartFooter() {
 
     setIsSaving(true);
     setError("");
-    const updatedOrderData = { items, subtotal, total, autoApplyPromos };
+    const updatedOrderData = { items, subtotal, total, autoApplyPromos: items.some((item) => item.isPromo) };
 
     try {
       const endpoint = editSellerSlug
@@ -62,7 +62,7 @@ export function CartFooter() {
   return (
     <div className="mt-auto pt-6 border-t border-border">
       <div className="mb-4">
-        <PromoToggle />
+        <ComboActions />
       </div>
 
       <div className="space-y-2">
@@ -105,7 +105,7 @@ export function CartFooter() {
 
       <button
         onClick={openOrderInfoModal}
-        disabled={total < 0 || (mode === "creating" && total === 0)}
+        disabled={!!comboSelection || total < 0 || (mode === "creating" && total === 0)}
         className={`mt-6 py-3 rounded-button w-full font-semibold text-white transition
           ${
             mode === "editing"
