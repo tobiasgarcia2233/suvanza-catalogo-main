@@ -56,6 +56,7 @@ export function CartItem({ item }: CartItemProps) {
                 src={item.imageUrls[0]}
                 alt={item.name}
                 fill
+                sizes="64px"
                 className="rounded-md object-cover"
               />
             ) : (
@@ -145,6 +146,7 @@ export function CartItem({ item }: CartItemProps) {
               src={item.imageUrls[0]}
               alt={item.name}
               fill
+              sizes="64px"
               className="rounded-md object-cover"
             />
           </div>

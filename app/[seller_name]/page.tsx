@@ -1,10 +1,31 @@
 import { notFound } from "next/navigation";
 import SellerPageClient from "./SellerPageClient";
-import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
-import { getSellerBySlug } from "@/lib/sellerQueries";
-import { getAllCategories } from "@/lib/categoryQueries";
+import {
+  getCachedProducts,
+  getCachedPromotions,
+  getCachedCategories,
+  getCachedSellerBySlug,
+} from "@/lib/catalogCache";
+import { getAllSellers } from "@/lib/sellerQueries";
 
-export const dynamic = "force-dynamic";
+// ISR: known sellers are prerendered at build; the catalog is served from cache
+// and rebuilt on demand when the admin edits a product/promo/category
+// (revalidateCatalog) — plus an hourly safety net. No Turso round-trips on a
+// normal visit.
+export const revalidate = 3600;
+
+// Sellers added after a deploy still work — they render on first visit and are
+// cached from then on.
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  try {
+    const sellers = await getAllSellers();
+    return sellers.map((s) => ({ seller_name: s.slug }));
+  } catch {
+    return [];
+  }
+}
 
 export default async function SellerPage({
   params,
@@ -13,13 +34,13 @@ export default async function SellerPage({
 }) {
   const { seller_name } = await params;
 
-  const seller = await getSellerBySlug(seller_name);
+  const seller = await getCachedSellerBySlug(seller_name);
   if (!seller) notFound();
 
   const [products, promotions, categories] = await Promise.all([
-    getAllProducts(),
-    getAllPromotions(),
-    getAllCategories(),
+    getCachedProducts(),
+    getCachedPromotions(),
+    getCachedCategories(),
   ]);
 
   return (

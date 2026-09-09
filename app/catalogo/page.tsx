@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { readSessionFromCookie } from "@/lib/auth";
-import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
-import { getAllCategories } from "@/lib/categoryQueries";
+import {
+  getCachedProducts,
+  getCachedPromotions,
+  getCachedCategories,
+} from "@/lib/catalogCache";
 import CatalogPageClient from "./CatalogPageClient";
 
+// Session-gated, so it can't be statically cached — but the catalog data is
+// still served from the shared on-demand cache (see lib/catalogCache.ts).
 export const dynamic = "force-dynamic";
 
 export default async function CatalogPage() {
@@ -11,9 +16,9 @@ export default async function CatalogPage() {
   if (!session) redirect("/?next=/catalogo");
 
   const [products, promotions, categories] = await Promise.all([
-    getAllProducts(),
-    getAllPromotions(),
-    getAllCategories(),
+    getCachedProducts(),
+    getCachedPromotions(),
+    getCachedCategories(),
   ]);
 
   return (

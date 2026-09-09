@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSessionFromCookie } from "@/lib/auth";
 import { deleteCategory, renameCategory } from "@/lib/categoryQueries";
+import { revalidateCatalog } from "@/lib/revalidateCatalog";
 
 export async function PATCH(
   request: NextRequest,
@@ -22,6 +23,7 @@ export async function PATCH(
       );
     }
     const category = await renameCategory(id, name);
+    revalidateCatalog();
     return NextResponse.json({ category });
   } catch (error) {
     console.error("PATCH /api/categories/[id] error:", error);
@@ -43,5 +45,6 @@ export async function DELETE(
 
   const { id } = await context.params;
   await deleteCategory(id);
+  revalidateCatalog();
   return NextResponse.json({ message: "Deleted" });
 }

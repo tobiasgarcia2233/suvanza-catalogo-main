@@ -38,6 +38,7 @@ export function ImageCarousel({ images }: ImageCarouselProps) {
                 src={item.src}
                 alt={item.alt}
                 fill
+                sizes="100vw"
                 className="rounded-lg object-contain"
               />
             ) : (

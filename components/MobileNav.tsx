@@ -8,7 +8,7 @@ import SellerNavLinks from "@/components/SellerNavLinks";
 import FullScreenButton from "@/components/FullScreenButton";
 import AdminSignOut from "@/app/admin/AdminSignOut";
 
-export default function MobileNav({ session }: { session: boolean }) {
+export default function MobileNav({ isAdmin }: { isAdmin: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,7 +54,7 @@ export default function MobileNav({ session }: { session: boolean }) {
 
       {open && (
         <div className="absolute right-0 top-full z-50 -mt-px w-56 rounded-card rounded-t-none border border-border bg-surface p-2 shadow-lg">
-          {session ? (
+          {isAdmin ? (
             <NavLinks orientation="vertical" onNavigate={close} />
           ) : (
             <SellerNavLinks orientation="vertical" onNavigate={close} />
@@ -62,7 +62,7 @@ export default function MobileNav({ session }: { session: boolean }) {
 
           <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
             <FullScreenButton withLabel />
-            {session && (
+            {isAdmin && (
               <AdminSignOut
                 iconSize={16}
                 className="flex w-full items-center gap-3 rounded-button px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-background hover:text-text-primary"

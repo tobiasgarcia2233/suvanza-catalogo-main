@@ -205,13 +205,14 @@ export function ProductDetailModal() {
           <div className="relative aspect-[4/3] w-full bg-gray-100 sm:aspect-[16/10]">
             {heroImages.length > 0 ? (
               <Swiper
+                key={selectedProduct.id}
                 modules={[Pagination]}
                 pagination={{ clickable: true }}
                 loop={heroImages.length > 1}
                 className="h-full w-full [--swiper-pagination-bottom:12px] [--swiper-pagination-color:#fff]"
               >
                 {heroImages.map((src, i) => (
-                  <SwiperSlide key={i}>
+                  <SwiperSlide key={`${src}-${i}`}>
                     <button
                       type="button"
                       onClick={() =>
@@ -386,6 +387,7 @@ export function ProductDetailModal() {
                                         src={img}
                                         alt=""
                                         fill
+                                        sizes="24px"
                                         className="object-cover"
                                       />
                                     ) : (

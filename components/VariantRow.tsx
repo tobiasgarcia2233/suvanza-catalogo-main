@@ -66,6 +66,7 @@ export function VariantRow({
               src={thumbnailSrc}
               alt={variant.name}
               fill
+              sizes="(max-width: 640px) 64px, 80px"
               className="object-cover"
             />
           ) : (

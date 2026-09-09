@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAllPromotions } from "@/lib/productQueries";
 import { createPromotion } from "@/lib/productMutations";
 import { readSessionFromCookie } from "@/lib/auth";
+import { getCachedPromotions } from "@/lib/catalogCache";
+import { revalidateCatalog } from "@/lib/revalidateCatalog";
 
 export async function GET() {
-  const promotions = await getAllPromotions();
+  const promotions = await getCachedPromotions();
   return NextResponse.json({ promotions });
 }
 
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
       );
     }
     const id = await createPromotion(body);
+    revalidateCatalog();
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
     return NextResponse.json(

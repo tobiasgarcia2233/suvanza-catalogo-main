@@ -1,14 +1,29 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import FullScreenButton from "@/components/FullScreenButton";
 import NavLinks from "@/components/NavLinks";
 import SellerNavLinks from "@/components/SellerNavLinks";
 import MobileNav from "@/components/MobileNav";
 import AdminSignOut from "@/app/admin/AdminSignOut";
-import { readSessionFromCookie } from "@/lib/auth";
 
-export default async function Navbar() {
-  const session = await readSessionFromCookie();
+// Session-gated areas. The navbar only picks which links to show — access is
+// enforced by the middleware (proxy.ts) and each page, so this never needs to
+// read the auth cookie. Keeping cookies() out of the root layout is what lets
+// the seller catalog (/[seller_name]) be statically cached.
+const ADMIN_PREFIXES = ["/admin", "/orders", "/odoo", "/catalogo"];
+
+function isAdminPath(pathname: string) {
+  return ADMIN_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+export default function Navbar() {
+  const pathname = usePathname();
+  const admin = isAdminPath(pathname);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-border bg-surface">
@@ -29,15 +44,15 @@ export default async function Navbar() {
         </Link>
 
         <div className="hidden lg:contents">
-          {session ? <NavLinks /> : <SellerNavLinks />}
+          {admin ? <NavLinks /> : <SellerNavLinks />}
 
           <div className="ml-auto flex items-center gap-3">
             <FullScreenButton />
-            {session && <AdminSignOut />}
+            {admin && <AdminSignOut />}
           </div>
         </div>
 
-        <MobileNav session={!!session} />
+        <MobileNav isAdmin={admin} />
       </nav>
     </header>
   );
