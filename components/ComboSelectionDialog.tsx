@@ -1,28 +1,62 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { gsap } from "gsap";
+import { X } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
+import { NearbyVolumeSuggestions, useCartPricingInsights } from "./CartPricingInformation";
+import type { CartItem } from "@/types";
 
 const money = (value: number) => `$${value.toLocaleString("es-CL")}`;
+const emptyItems: CartItem[] = [];
 
 export function ComboSelectionDialog() {
   const selection = useCartStore((state) => state.comboSelection);
   const apply = useCartStore((state) => state.applyComboSelection);
   const changeQuantity = useCartStore((state) => state.updateComboSelectionQuantity);
   const cancel = useCartStore((state) => state.cancelComboSelection);
-  const hasManualCombos = useCartStore((state) => state.items.some((item) => item.isPromo &&
-    (item.manualPercentage > 0 || item.manualPricePerUnit != null || item.manualTotal != null)));
   const dialog = useRef<HTMLDialogElement>(null);
+  const pointerStartedOutside = useRef(false);
   const revision = selection?.revision;
+  const isOpen = revision !== undefined;
+  const insights = useCartPricingInsights(selection?.previewItems ?? emptyItems, selection?.total ?? 0);
 
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
     if (revision !== undefined) {
-      if (!element.open) element.showModal();
+      if (!element.open) {
+        element.showModal();
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          gsap.fromTo(element, { x: "100%" }, { x: "0%", duration: 0.3, ease: "power3.out" });
+        }
+      }
       element.querySelector<HTMLHeadingElement>("h2")?.focus();
     } else if (element.open) element.close();
+    return () => {
+      gsap.killTweensOf(element);
+      // Effect replay / Fast Refresh must not leave a half-translated panel.
+      gsap.set(element, { clearProps: "transform" });
+    };
   }, [revision]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Reuse Catálogo's body lock without releasing an underlying cart's lock.
+    const alreadyLocked = document.body.classList.contains("no-scroll");
+    document.body.classList.add("no-scroll");
+    return () => {
+      if (!alreadyLocked) document.body.classList.remove("no-scroll");
+    };
+  }, [isOpen]);
+
+  const isOutsidePanel = (event: React.MouseEvent<HTMLDialogElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.target === event.currentTarget && (
+      event.clientX < bounds.left || event.clientX > bounds.right ||
+      event.clientY < bounds.top || event.clientY > bounds.bottom
+    );
+  };
 
   const leftovers = selection?.previewItems.filter((item) => !item.isPromo) ?? [];
   const selectedCount = selection?.options.reduce((sum, option) => sum + option.selectedQuantity, 0) ?? 0;
@@ -33,25 +67,26 @@ export function ComboSelectionDialog() {
       aria-labelledby="combo-selection-title"
       aria-describedby="combo-selection-description"
       onCancel={(event) => { event.preventDefault(); cancel(); }}
-      className="fixed inset-0 m-auto max-h-[74dvh] w-[86vw] max-w-2xl overflow-hidden rounded-2xl bg-background p-0 text-text-primary shadow-2xl backdrop:bg-black/50"
+      onPointerDown={(event) => { pointerStartedOutside.current = isOutsidePanel(event); }}
+      onClick={(event) => {
+        if (pointerStartedOutside.current && isOutsidePanel(event)) cancel();
+        pointerStartedOutside.current = false;
+      }}
+      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-2xl overflow-hidden overscroll-none rounded-none border-0 bg-background p-0 text-text-primary shadow-2xl backdrop:bg-black/40"
     >
       {selection && (
-        <div className="flex max-h-[74dvh] flex-col">
-          <div className="shrink-0 px-5 pt-5 pb-3">
-            <h2 id="combo-selection-title" tabIndex={-1} className="text-3xl font-bold outline-none">
-              Elegí tus combos
-            </h2>
-            <p id="combo-selection-description" className="mt-2 text-xl leading-relaxed">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 sm:px-6">
+            <h2 id="combo-selection-title" tabIndex={-1} className="text-3xl font-bold leading-tight outline-none">Elegí tus combos</h2>
+            <button type="button" onClick={cancel} aria-label="Cerrar selección de combos"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+              <X size={24} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+            <p id="combo-selection-description" className="mb-4 text-xl leading-relaxed">
               Usá + y − para elegir cuántos aplicar. Solo se usan productos de tu carrito.
             </p>
-          </div>
-          <div className="min-h-0 overflow-y-auto px-5 pb-4">
-            {hasManualCombos && (
-              <p className="mb-4 rounded-lg bg-[#FBF4EF] p-3 text-lg leading-relaxed">
-                Los combos con precio o descuento manual se conservan. Para cambiarlos,
-                primero quitá su ajuste manual en el carrito.
-              </p>
-            )}
             <div className="grid gap-3" aria-label="Combos disponibles">
               {selection.options.map((option, index) => {
                 const unavailable = option.maxQuantity === 0;
@@ -101,27 +136,43 @@ export function ComboSelectionDialog() {
             <div className="mt-4 text-lg leading-relaxed">
               <p className="font-bold">Productos fuera de los combos:</p>
               <p>{leftovers.length ? leftovers.map((item) => `${item.quantity} × ${item.name}`).join(" · ") : "Ninguno"}</p>
-              <p className="mt-2">Estos productos quedan sin combo. No se agregan otros combos automáticamente.</p>
             </div>
+            {selection.applyLimitation && <p className="mt-3 text-lg leading-snug text-amber-800">{selection.applyLimitation}</p>}
           </div>
-          <div className="shrink-0 border-t border-border bg-background px-5 py-4">
-            <p className="mb-3 text-2xl font-bold" aria-live="polite">Total del carrito: {money(selection.total)}</p>
+          <div className="shrink-0 border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            <div className="mb-3 space-y-1" aria-live="polite">
+              <p className="text-2xl font-bold">Total con esta selección: {money(selection.total)}</p>
+              {insights.comparison ? <>
+                <p className="text-lg">Sin combos: {money(insights.comparison.withoutCombos)}</p>
+                {(insights.comparison.difference !== 0 || insights.suggestions.length > 0) && (
+                  <div className={`space-y-1 text-lg font-semibold ${insights.comparison.difference > 0 ? "text-amber-800" : "text-text-secondary"}`}>
+                    {insights.comparison.difference !== 0 && <p>
+                      {money(Math.abs(insights.comparison.difference))} {insights.comparison.difference > 0 ? "más" : "menos"} que sin combos.
+                      {insights.comparison.difference > 0 && insights.comparison.lostVolumeBrands.length > 0 && " Se pierde precio por volumen en los productos restantes."}
+                    </p>}
+                    <NearbyVolumeSuggestions insights={insights} items={selection.previewItems} compact />
+                  </div>
+                )}
+              </> : <p className="text-lg">{insights.limitation}</p>}
+            </div>
             <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={cancel} className="min-h-12 flex-1 rounded-lg border-2 border-brand px-4 py-3 text-xl font-bold text-brand">
+              <button type="button" onClick={cancel} className="min-h-12 flex-1 rounded-xl border-2 border-brand px-4 py-3 text-xl font-bold text-brand transition-colors hover:bg-brand/5">
                 Cancelar
               </button>
               <button
                 type="button"
+                disabled={selectedCount === 0 || !!selection.applyLimitation}
                 onClick={() => apply(selection.revision)}
-                className="min-h-12 flex-1 rounded-lg bg-brand px-4 py-3 text-xl font-bold text-white"
+                className="min-h-12 flex-1 rounded-xl bg-brand px-4 py-3 text-xl font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
               >
                 Aplicar selección
               </button>
             </div>
             <p className="mt-2 text-lg leading-relaxed">
-              {selectedCount === 0 ? "Sin combos seleccionados: se conservan los productos fuera de combos." : `Se aplican solo las ${selectedCount} repeticiones elegidas.`}
+              {selectedCount === 0 ? "Elegí al menos una repetición para aplicar."
+                : selection.applyLimitation ? "Revisá el ajuste manual indicado para aplicar esta selección."
+                : `Se aplican solo las ${selectedCount} repeticiones elegidas.`}
             </p>
-            {hasManualCombos && <p className="mt-2 text-lg">Cancelar quita también los descuentos manuales de los combos.</p>}
           </div>
         </div>
       )}

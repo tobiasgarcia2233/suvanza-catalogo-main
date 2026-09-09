@@ -13,7 +13,7 @@ import {
 } from "@/types";
 import { getProducts, getPromotions, useProductsStore } from "@/store/productsStore";
 import {
-  applyCandidate, choiceKey, expandAutomaticBundles, findComboCandidates,
+  getAvailableCombos, preserveComboAdjustments,
   allocateComboSelection, selectionLimits, isAutomaticBundle,
   type ComboCandidate,
 } from "@/lib/comboSelection";
@@ -30,10 +30,12 @@ interface ComboSelection {
   inputKey: string;
   options: ComboOption[];
   availableItems: CartItem[];
+  originalItems: CartItem[];
   candidates: ComboCandidate[];
   quantities: Record<string, number>;
   previewItems: CartItem[];
   total: number;
+  applyLimitation: string | null;
 }
 
 let selectionRevision = 0;
@@ -103,26 +105,25 @@ interface CartState {
     itemId: string | number,
     price: number | null
   ) => void;
-  autoApplyPromos: boolean;
-  toggleAutoApplyPromos: () => void;
+  evaluateCombos: () => void;
+  removeCombos: () => void;
+  comboNotice: string | null;
   comboSelection: ComboSelection | null;
-  comboInputKey: string;
-  comboConfirmedKey?: string;
   updateComboSelectionQuantity: (id: string, quantity: number, revision: number) => void;
   applyComboSelection: (revision: number) => void;
   cancelComboSelection: () => void;
 }
 
-function priceCart(
+export function priceCart(
   items: CartItem[],
-  autoApplyPromos: boolean
-): Partial<CartState> {
+  keepCombos: boolean
+): Pick<CartState, "items" | "subtotal" | "total" | "discountDetails"> {
   let finalTotal = 0;
   let finalSubtotal = 0;
   const finalDiscountDetails: DiscountDetail[] = [];
   let processedItems = [...items];
 
-  if (!autoApplyPromos) {
+  if (!keepCombos) {
     const flattenedItems = items.flatMap((item) =>
       item.isPromo && item.includedItems
         ? item.includedItems.map((included) => ({
@@ -353,24 +354,19 @@ function selectionInputKey(items: CartItem[]): string {
   return JSON.stringify([items.map(purchase), getProducts(), getPromotions()]);
 }
 
-function confirmedSelectionKey(items: CartItem[]): string {
-  const expanded = expandAutomaticBundles(items, true);
-  const candidates = findComboCandidates(expanded, getPromotions());
-  return JSON.stringify(candidates.map((candidate) =>
-    choiceKey(expanded, candidates, candidate.promotion.id)).sort());
-}
-
 function updateSelectionPreview(selection: ComboSelection, quantities: Record<string, number>): ComboSelection | null {
   const allocated = allocateComboSelection(selection.availableItems,
     selection.candidates.map((candidate) => candidate.promotion), quantities);
   if (!allocated) return null;
   const limits = selectionLimits(selection.availableItems, selection.candidates, quantities);
-  const priced = priceCart(allocated, true);
+  const protectedSelection = preserveComboAdjustments(allocated, selection.originalItems);
+  const priced = priceCart(protectedSelection.items, true);
   return {
     ...selection,
     quantities,
     previewItems: priced.items!,
     total: priced.total!,
+    applyLimitation: protectedSelection.limitation,
     options: selection.candidates.map(({ promotion }) => ({
       id: promotion.id, promotion,
       selectedQuantity: quantities[promotion.id] ?? 0,
@@ -379,42 +375,26 @@ function updateSelectionPreview(selection: ComboSelection, quantities: Record<st
   };
 }
 
-function buildSelection(items: CartItem[], candidates: ComboCandidate[], inputKey: string): ComboSelection {
+function buildSelection(items: CartItem[], candidates: ComboCandidate[], originalItems: CartItem[]): ComboSelection {
   return updateSelectionPreview({
-    revision: ++selectionRevision, inputKey, availableItems: items, candidates,
-    quantities: {}, options: [], previewItems: [], total: 0,
+    revision: ++selectionRevision, inputKey: selectionInputKey(originalItems), availableItems: items, candidates, originalItems,
+    quantities: {}, options: [], previewItems: [], total: 0, applyLimitation: null,
   }, {})!;
 }
 
-function recalculateAndSetState(items: CartItem[], autoApplyPromos: boolean): Partial<CartState> {
-  if (!autoApplyPromos) {
-    return { ...priceCart(items, false), comboSelection: null, comboInputKey: "", comboConfirmedKey: "" };
-  }
-  if (!useProductsStore.getState().hydrated) return { items, comboSelection: null };
-  const confirmedKey = confirmedSelectionKey(items);
-  // An explicit confirmation includes leaving eligible products outside combos.
-  // Preserve that decision on unrelated edits, hydration and price recalculation.
-  if (useCartStore.getState().comboConfirmedKey === confirmedKey) {
-    const priced = priceCart(items, true);
-    return { ...priced, comboSelection: null, comboInputKey: selectionInputKey(priced.items!) };
-  }
-  const available = expandAutomaticBundles(items);
-  const candidates = findComboCandidates(available, getPromotions());
-  if (candidates.length < 2) {
-    const result = candidates.length === 1
-      ? applyCandidate(available, candidates[0], choiceKey(available, candidates, candidates[0].promotion.id))
-      : available;
-    const priced = priceCart(result, true);
-    return { ...priced, comboSelection: null, comboInputKey: selectionInputKey(priced.items!),
-      comboConfirmedKey: confirmedSelectionKey(priced.items!) };
-  }
-  // Dialog quantities only change the preview. The live purchase remains intact.
-  const live = priceCart(items, true);
-  const inputKey = selectionInputKey(live.items!);
-  return { ...live, comboInputKey: inputKey, comboSelection: buildSelection(available, candidates, inputKey) };
+// Only a changed purchase invalidates the preview; committing an unchanged
+// input (for example on blur) must not dismiss the dialog.
+// Combo discovery and application are exclusively explicit vendor actions.
+function recalculateAndSetState(items: CartItem[]): Partial<CartState> {
+  const selection = useCartStore.getState().comboSelection;
+  return {
+    ...priceCart(items, true),
+    comboSelection: selection?.inputKey === selectionInputKey(items) ? selection : null,
+    comboNotice: null,
+  };
 }
 export const useCartStore = create(
-  persist<CartState, [], [], Omit<CartState, "comboSelection" | "comboInputKey">>(
+  persist<CartState, [], [], Omit<CartState, "comboSelection" | "comboNotice">>(
     (set, get) => ({
       items: [],
       subtotal: 0,
@@ -423,18 +403,48 @@ export const useCartStore = create(
       mode: "creating",
       originalOrder: null,
       editSellerSlug: null,
-      autoApplyPromos: true,
       comboSelection: null,
-      comboInputKey: "",
-      comboConfirmedKey: "",
+      comboNotice: null,
 
-      toggleAutoApplyPromos: () => {
-        const newStatus = !get().autoApplyPromos;
-        set({ ...recalculateAndSetState(get().items, newStatus), autoApplyPromos: newStatus });
+      evaluateCombos: () => {
+        if (!useProductsStore.getState().hydrated) return;
+        const state = get();
+        const { availableItems, candidates, limitation } = getAvailableCombos(state.items, getPromotions());
+        if (!availableItems || !candidates.length) {
+          set({ comboSelection: null, comboNotice: limitation });
+          return;
+        }
+        if (candidates.length === 1) {
+          const candidate = candidates[0];
+          const allocated = allocateComboSelection(availableItems, [candidate.promotion], {
+            [candidate.promotion.id]: candidate.repetitions,
+          });
+          if (allocated) {
+            const protectedSelection = preserveComboAdjustments(allocated, state.items);
+            if (protectedSelection.limitation) set({ comboNotice: protectedSelection.limitation });
+            else set({ ...recalculateAndSetState(protectedSelection.items), comboSelection: null });
+          }
+          return;
+        }
+        // Opening previews a complete regrouping without touching the purchase.
+        set({ comboSelection: buildSelection(availableItems, candidates, state.items), comboNotice: null });
+      },
+
+      removeCombos: () => {
+        const items = get().items;
+        if (!items.some((item) => item.isPromo)) return;
+        const { limitation } = getAvailableCombos(items, []);
+        if (limitation) {
+          set({ comboNotice: limitation });
+          return;
+        }
+        // Reuse the old toggle-off pricing, including variant merging and the
+        // existing removal of bundle-level (not constituent) manual adjustments.
+        set({ ...priceCart(items, false), comboSelection: null, comboNotice: null });
       },
 
       cancelComboSelection: () => {
-        set({ ...recalculateAndSetState(get().items, false), autoApplyPromos: false });
+        set({ comboSelection: null });
       },
 
       updateComboSelectionQuantity: (id, quantity, revision) => {
@@ -442,7 +452,7 @@ export const useCartStore = create(
         const selection = state.comboSelection;
         if (!selection || selection.revision !== revision) return;
         if (selection.inputKey !== selectionInputKey(state.items)) {
-          set(recalculateAndSetState(state.items, state.autoApplyPromos));
+          set({ comboSelection: null });
           return;
         }
         const option = selection.options.find((option) => option.id === id);
@@ -456,16 +466,14 @@ export const useCartStore = create(
         const selection = state.comboSelection;
         if (!selection || selection.revision !== revision) return;
         if (selection.inputKey !== selectionInputKey(state.items)) {
-          set(recalculateAndSetState(state.items, state.autoApplyPromos));
+          set({ comboSelection: null });
           return;
         }
+        if (!Object.values(selection.quantities).some((quantity) => quantity > 0)) return;
         const updated = updateSelectionPreview(selection, selection.quantities);
-        if (!updated) return;
-        // Commit precisely these quantities, including an intentional all-zero
-        // selection. Do not run discovery or auto-apply leftover offers here.
-        const priced = priceCart(updated.previewItems, true);
-        set({ ...priced, comboSelection: null, comboInputKey: selectionInputKey(priced.items!),
-          comboConfirmedKey: confirmedSelectionKey(priced.items!) });
+        if (!updated || updated.applyLimitation) return;
+        // Commit exactly the confirmed allocation; never discover more combos.
+        set({ ...recalculateAndSetState(updated.previewItems), comboSelection: null });
       },
 
       getOrderForEdit: () => {
@@ -516,10 +524,8 @@ export const useCartStore = create(
           originalOrder: order,
           mode: "editing",
           editSellerSlug: sellerSlug ?? null,
-          autoApplyPromos: order.autoApplyPromos ?? true,
-          comboConfirmedKey: "",
         });
-        set(recalculateAndSetState(loadedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(loadedItems));
       },
 
       addMultipleToCart: (parentProduct, quantities) => {
@@ -569,7 +575,7 @@ export const useCartStore = create(
             }
           }
         });
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       setItemManualPricePerUnit: (itemId, price) => {
@@ -584,7 +590,7 @@ export const useCartStore = create(
               }
             : item
         );
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       addCrossPromotionToCart: (
@@ -663,7 +669,7 @@ export const useCartStore = create(
           });
         }
 
-        set(recalculateAndSetState(currentItems, get().autoApplyPromos));
+        set(recalculateAndSetState(currentItems));
       },
 
       updateQuantity: (itemId, quantity) => {
@@ -672,12 +678,12 @@ export const useCartStore = create(
             (item.cartLineKey ?? item.id) === itemId ? { ...item, quantity } : item
           )
           .filter((item) => item.quantity > 0);
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       removeFromCart: (itemId) => {
         const updatedItems = get().items.filter((item) => (item.cartLineKey ?? item.id) !== itemId);
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       setItemManualDiscountPercentage: (itemId, percentage) => {
@@ -686,7 +692,7 @@ export const useCartStore = create(
             ? { ...item, manualPercentage: percentage ?? 0, manualTotal: null }
             : item
         );
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       setItemManualTotal: (itemId, total) => {
@@ -695,7 +701,7 @@ export const useCartStore = create(
             ? { ...item, manualTotal: total, manualPercentage: 0 }
             : item
         );
-        set(recalculateAndSetState(updatedItems, get().autoApplyPromos));
+        set(recalculateAndSetState(updatedItems));
       },
 
       clearCart: () => {
@@ -708,8 +714,7 @@ export const useCartStore = create(
           originalOrder: null,
           editSellerSlug: null,
           comboSelection: null,
-          comboInputKey: "",
-          comboConfirmedKey: "",
+          comboNotice: null,
         });
       },
     }),
@@ -718,15 +723,34 @@ export const useCartStore = create(
       storage: createJSONStorage(() => localStorage),
       // A dialog is temporary. Keep the existing cart persistence format and
       // never save unconfirmed choices or snapshots of the catalog.
-      partialize: ({ comboSelection, comboInputKey, ...state }) => state,
+      partialize: ({ comboSelection, comboNotice, ...state }) => state,
+      merge: (persisted, current) => {
+        // Ignore legacy toggle/confirmation flags and never restore a dialog.
+        const { autoApplyPromos, comboConfirmedKey, comboInputKey, comboSelection, comboNotice, ...purchase } = persisted ?? {};
+        return { ...current, ...purchase, comboSelection: null, comboNotice: null };
+      },
     }
   )
 );
 
 useProductsStore.subscribe((catalog, previous) => {
   if (!catalog.hydrated || (catalog.products === previous.products && catalog.promotions === previous.promotions)) return;
+  // RSC refreshes / repeated hydration can supply new arrays with identical
+  // contents. Reference changes alone must not reprice or dismiss a selection.
+  if (JSON.stringify([catalog.products, catalog.promotions]) ===
+    JSON.stringify([previous.products, previous.promotions])) return;
   const cart = useCartStore.getState();
-  if (cart.items.length && cart.autoApplyPromos && cart.comboInputKey !== selectionInputKey(cart.items)) {
-    useCartStore.setState(recalculateAndSetState(cart.items, true));
+  if (!cart.items.length) return;
+  const priced = priceCart(cart.items, true);
+  let selection = cart.comboSelection;
+  if (selection) {
+    const { availableItems, candidates } = getAvailableCombos(priced.items, catalog.promotions);
+    // Refresh an already-open preview in place, retaining its revision and
+    // chosen counts. Close only if those counts can no longer be allocated.
+    selection = availableItems && candidates.length ? updateSelectionPreview({
+      ...selection, availableItems, candidates, originalItems: priced.items,
+      inputKey: selectionInputKey(priced.items),
+    }, selection.quantities) : null;
   }
+  useCartStore.setState({ ...priced, comboSelection: selection, comboNotice: null });
 });

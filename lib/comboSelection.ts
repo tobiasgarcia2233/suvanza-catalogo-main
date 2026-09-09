@@ -7,6 +7,62 @@ export interface ComboCandidate {
   remaining: CartItem[];
 }
 
+// A read-only view of the complete purchase, including explicitly added and
+// manually adjusted bundles. Do not invent variants for old/incomplete bundles.
+export function getAvailableCombos(items: CartItem[], promotions: CrossPromotion[]) {
+  const incomplete = items.some((item) => item.isPromo && (!item.includedItems?.length ||
+    item.includedItems.some((included) => included.isPromo || !Number.isFinite(included.quantity) || included.quantity <= 0)));
+  if (incomplete) return {
+    availableItems: null, candidates: [],
+    limitation: "Falta el detalle de productos de un combo. No podemos reorganizarlo ni quitarlo sin perder cantidades.",
+  };
+  const expanded = items.flatMap((item) => item.isPromo
+    ? item.includedItems!.map((included) => ({ ...included, quantity: included.quantity * item.quantity }))
+    : [{ ...item }]);
+  // Match the existing regrouping rule: equivalent lines merge, while distinct
+  // manual product adjustments remain separate. No-combo removal uses priceCart.
+  const merged = new Map<string, CartItem>();
+  expanded.forEach((item) => {
+    const key = JSON.stringify([item.id, item.manualPercentage, item.manualPricePerUnit, item.manualTotal, item.priceTiers]);
+    const previous = merged.get(key);
+    if (previous) previous.quantity += item.quantity;
+    else merged.set(key, item);
+  });
+  const availableItems = [...merged.values()];
+  return { availableItems, candidates: findComboCandidates(availableItems, promotions), limitation: null };
+}
+
+export function preserveComboAdjustments(allocated: CartItem[], original: CartItem[]) {
+  const adjusted = original.filter((item) => item.isPromo &&
+    (item.manualPercentage > 0 || item.manualPricePerUnit != null || item.manualTotal != null));
+  const contentsKey = (bundle: CartItem) => JSON.stringify(bundle.includedItems?.map((item) =>
+    JSON.stringify([item.id, item.quantity, item.manualPercentage, item.manualPricePerUnit ?? null, item.manualTotal, item.priceTiers])).sort());
+  const remaining = allocated.map((item) => ({ ...item }));
+  const preserved: CartItem[] = [];
+  for (const bundle of adjusted) {
+    let needed = bundle.quantity;
+    for (const replacement of remaining) {
+      if (!replacement.isPromo || (replacement.promoId ?? replacement.id) !== (bundle.promoId ?? bundle.id) ||
+        contentsKey(replacement) !== contentsKey(bundle) || replacement.quantity <= 0) continue;
+      const quantity = Math.min(needed, replacement.quantity);
+      let id = `${replacement.id}:adjusted`;
+      while ([...remaining, ...preserved].some((item) => item.id === id)) id += ":next";
+      preserved.push({
+        ...replacement, id, quantity, manualPercentage: bundle.manualPercentage,
+        manualPricePerUnit: bundle.manualPricePerUnit, manualTotal: bundle.manualTotal,
+      });
+      replacement.quantity -= quantity;
+      needed -= quantity;
+      if (needed === 0) break;
+    }
+    if (needed > 0) return {
+      items: allocated,
+      limitation: `Para reemplazar «${bundle.name}», quitá primero su ajuste manual en el carrito. O usá la acción de quitar combos para desarmarlos y usar el precio sin combos.`,
+    };
+  }
+  return { items: [...remaining.filter((item) => item.quantity > 0), ...preserved], limitation: null };
+}
+
 export function matchesRequirement(
   item: CartItem,
   requirement: CrossPromotion["items"][number],

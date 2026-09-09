@@ -33,7 +33,8 @@ export function OrderInfoModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const { autoApplyPromos } = useCartStore.getState();
+  // Legacy order metadata describes the purchase, never an evaluation mode.
+  const autoApplyPromos = items.some((item) => item.isPromo);
 
   useEffect(() => {
     if (isOrderInfoModalOpen) {

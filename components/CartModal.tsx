@@ -10,6 +10,7 @@ import { CartFooter } from "./CartFooter";
 import { QuickAddModal } from "./QuickAddModal";
 import { useProductsStore } from "@/store/productsStore";
 import { ComboSelectionDialog } from "./ComboSelectionDialog";
+import { CartPricingInformation } from "./CartPricingInformation";
 
 export function CartModal() {
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -17,7 +18,7 @@ export function CartModal() {
 
   const { isCartOpen, closeCart } = useUIStore();
   // --- 1. Get the mode and clearCart action ---
-  const { items, mode, clearCart } = useCartStore();
+  const { items, total, mode, clearCart } = useCartStore();
   const products = useProductsStore((s) => s.products);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
@@ -120,6 +121,7 @@ export function CartModal() {
                     <Plus size={16} />
                     Añadir más productos
                   </button>
+                  <CartPricingInformation items={items} total={total} />
                 </div>
                 <CartFooter />
               </>
