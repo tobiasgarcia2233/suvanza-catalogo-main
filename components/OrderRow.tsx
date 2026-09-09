@@ -6,6 +6,7 @@ import type { Order } from "@/types";
 import {
   Check,
   CheckCircle,
+  ChevronDown,
   CreditCard,
   Loader2,
   MoreVertical,
@@ -35,6 +36,7 @@ export function OrderRow({ order }: OrderRowProps) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { loadOrderForEdit } = useCartStore();
   const { openConfirmationModal, openCart } = useUIStore();
@@ -140,6 +142,9 @@ export function OrderRow({ order }: OrderRowProps) {
 
   const spinner = <Loader2 size={18} className="animate-spin" />;
 
+  const combos = order.promos_sold ?? [];
+  const itemCount = order.items.reduce((sum, it) => sum + (it.quantity || 0), 0);
+
   return (
     <>
       {showUpdateSuccess && (
@@ -149,10 +154,25 @@ export function OrderRow({ order }: OrderRowProps) {
       )}
 
       <div
-        className={`grid grid-cols-7 items-center gap-4 rounded-lg border p-4 transition-all
+        className={`rounded-lg border transition-all
           ${isCompleted ? "bg-gray-100" : "bg-surface hover:shadow-md"}
           ${anyBusy ? "opacity-70" : ""}`}
       >
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={() => setItemsOpen((open) => !open)}
+          className="flex w-11 shrink-0 items-center justify-center self-stretch rounded-l-lg text-text-secondary transition-colors hover:bg-background hover:text-text-primary"
+          aria-label={itemsOpen ? "Ocultar productos del pedido" : "Ver productos del pedido"}
+          aria-expanded={itemsOpen}
+        >
+          <ChevronDown
+            size={18}
+            className={`transition-transform ${itemsOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        <div className="grid flex-1 grid-cols-7 items-center gap-4 p-4">
         <div className="col-span-2">
           <p className="font-bold text-text-primary">
             {order.buyer_details.name}
@@ -308,6 +328,61 @@ export function OrderRow({ order }: OrderRowProps) {
             )}
           </div>
         </div>
+        </div>
+      </div>
+
+      {itemsOpen && (
+        <div className="border-t border-border px-4 py-3 text-sm">
+          {combos.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Combos
+              </p>
+              <ul className="flex flex-col gap-1">
+                {combos.map((combo) => (
+                  <li key={combo.id} className="flex items-baseline gap-2">
+                    <span className="w-10 shrink-0 text-base font-bold text-brand">
+                      {combo.quantity}×
+                    </span>
+                    <span>{combo.title}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Productos{" "}
+            <span className="font-normal normal-case">
+              ({itemCount} {itemCount === 1 ? "unidad" : "unidades"})
+            </span>
+          </p>
+          {order.items.length === 0 ? (
+            <p className="text-text-secondary">Sin productos.</p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {order.items.map((item, i) => (
+                <li
+                  key={item.id || i}
+                  className="flex items-baseline gap-2"
+                >
+                  <span className="w-10 shrink-0 text-base font-bold text-brand">
+                    {item.quantity}×
+                  </span>
+                  <span>
+                    {item.brand && (
+                      <span className="text-text-secondary">
+                        {item.brand} —{" "}
+                      </span>
+                    )}
+                    {item.name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       </div>
 
       <NotesModal

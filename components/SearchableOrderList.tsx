@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useTransition } from "react";
+import { useMemo, useRef, useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Order } from "@/types";
 import { OrderRow } from "./OrderRow";
@@ -21,14 +21,44 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
   const [endDate, setEndDate] = useState(searchParams.get("endDate") || "");
   const [summaryOpen, setSummaryOpen] = useState(false);
 
+  // Instead of blindly re-rendering the whole page every few seconds, poll a
+  // tiny endpoint and only refresh when it reports that orders actually
+  // changed. Skips work while a modal is open, the tab is hidden, or the user
+  // is looking at a fixed date range (history — no need for live updates).
+  const lastPulseRef = useRef<string | null>(null);
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (isRefreshPaused()) return;
-      if (!searchParams.get("startDate") && !searchParams.get("endDate")) {
-        router.refresh();
+    const hasDateFilter =
+      !!searchParams.get("startDate") || !!searchParams.get("endDate");
+    if (hasDateFilter) return;
+
+    let cancelled = false;
+
+    const check = async () => {
+      if (isRefreshPaused() || document.hidden) return;
+      try {
+        const res = await fetch("/api/orders/pulse", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const sig = `${data.count}:${data.latest}:${data.paid}`;
+        if (lastPulseRef.current === null) {
+          lastPulseRef.current = sig;
+          return;
+        }
+        if (sig !== lastPulseRef.current) {
+          lastPulseRef.current = sig;
+          router.refresh();
+        }
+      } catch {
+        /* transient network error — retry on the next tick */
       }
-    }, 10000);
-    return () => clearInterval(interval);
+    };
+
+    check();
+    const interval = setInterval(check, 12000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [router, searchParams]);
 
   const updateUrlParams = () => {
@@ -198,22 +228,27 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
       {!isPending &&
         (initialOrders.length > 0 ? (
           <div className="flex flex-col gap-4">
-            <div className="gap-4 grid grid-cols-7 px-4 pb-2 border-border border-b">
-              <div className="col-span-2 font-semibold text-text-secondary text-sm">
-                COMPRADOR
-              </div>
-              <div className="font-semibold text-text-secondary text-sm">
-                VENDEDOR
-              </div>
-              <div className="font-semibold text-text-secondary text-sm">FECHA</div>
-              <div className="font-semibold text-text-secondary text-sm text-right">
-                TOTAL
-              </div>
-              <div className="font-semibold text-text-secondary text-sm text-center">
-                ESTADO
-              </div>
-              <div className="font-semibold text-text-secondary text-sm text-right">
-                ACCIONES
+            <div className="flex border-border border-b">
+              <div className="w-11 shrink-0" />
+              <div className="gap-4 grid grid-cols-7 flex-1 px-4 pb-2">
+                <div className="col-span-2 font-semibold text-text-secondary text-sm">
+                  COMPRADOR
+                </div>
+                <div className="font-semibold text-text-secondary text-sm">
+                  VENDEDOR
+                </div>
+                <div className="font-semibold text-text-secondary text-sm">
+                  FECHA
+                </div>
+                <div className="font-semibold text-text-secondary text-sm text-right">
+                  TOTAL
+                </div>
+                <div className="font-semibold text-text-secondary text-sm text-center">
+                  ESTADO
+                </div>
+                <div className="font-semibold text-text-secondary text-sm text-right">
+                  ACCIONES
+                </div>
               </div>
             </div>
             {initialOrders.map((order) => (

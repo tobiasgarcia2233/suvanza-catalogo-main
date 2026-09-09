@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { readSessionFromCookie } from "@/lib/auth";
 import { fetchRecentOrders } from "@/lib/orderQueries";
-import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
 import { OrdersPageClient } from "./OrdersPageClient";
 import { Suspense } from "react";
 
@@ -18,19 +17,14 @@ export default async function OrdersDashboardPage({
 
   const { q, startDate, endDate } = await searchParams;
 
-  const [initialOrders, products, promotions] = await Promise.all([
-    fetchRecentOrders(q || "", startDate, endDate),
-    getAllProducts(),
-    getAllPromotions(),
-  ]);
+  // Only the orders list is fetched here, so router.refresh() (polling or after
+  // creating a sale) stays cheap. The product catalog needed by "Nuevo pedido"
+  // is loaded once, client-side, in OrdersPageClient.
+  const initialOrders = await fetchRecentOrders(q || "", startDate, endDate);
 
   return (
     <Suspense fallback={<p className="p-8 text-center">Cargando pedidos...</p>}>
-      <OrdersPageClient
-        initialOrders={initialOrders}
-        products={products}
-        promotions={promotions}
-      />
+      <OrdersPageClient initialOrders={initialOrders} />
     </Suspense>
   );
 }
