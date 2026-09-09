@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ProductGrid } from "@/components/ProductGrid";
 import { CatalogView } from "@/components/CatalogView";
 import { ViewModeSwitch, ViewMode } from "@/components/ViewModeSwitch";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
+import { CategoryFilterBar } from "@/components/CategoryFilterBar";
 import { CartModal } from "@/components/CartModal";
 import { OrderInfoModal } from "@/components/OrderInfoModal";
 import { SellerOrdersPanel } from "@/components/SellerOrdersPanel";
 import ProductsHydrator from "@/components/ProductsHydrator";
-import type { Product, CrossPromotion } from "@/types";
+import type { Product, CrossPromotion, Category } from "@/types";
 import { useUIStore } from "@/store/uiStore";
 import { useCartStore } from "@/store/cartStore";
 import { ShoppingCart, CheckCircle } from "lucide-react";
@@ -20,17 +21,28 @@ export default function SellerPageClient({
   sellerSlug,
   products,
   promotions,
+  categories,
 }: {
   sellerName: string;
   sellerSlug: string;
   products: Product[];
   promotions: CrossPromotion[];
+  categories: Category[];
 }) {
   const { openCart, isModalOpen } = useUIStore();
   const { items } = useCartStore();
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const filteredProducts = useMemo(
+    () =>
+      selectedCategory
+        ? products.filter((p) => p.categoryIds?.includes(selectedCategory))
+        : products,
+    [products, selectedCategory],
+  );
 
   useEffect(() => {
     if (isModalOpen) {
@@ -71,17 +83,25 @@ export default function SellerPageClient({
           <Image
             src={"/images/logo.png"}
             alt="suvanza"
-            width={200}
-            height={200}
+            width={220}
+            height={64}
+            priority
+            className="h-16 w-auto shrink-0 object-contain"
           />
           <ViewModeSwitch viewMode={viewMode} setViewMode={setViewMode} />
         </div>
 
+        <CategoryFilterBar
+          categories={categories}
+          selected={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
+
         <main className="w-full">
           {viewMode === "grid" ? (
-            <ProductGrid products={products} />
+            <ProductGrid products={filteredProducts} />
           ) : (
-            <CatalogView products={products} />
+            <CatalogView products={filteredProducts} />
           )}
         </main>
       </div>

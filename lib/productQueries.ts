@@ -9,12 +9,16 @@ function readProduct(row: Row): Product {
     id: row.id as string,
     brand: (row.brand as string | null) ?? undefined,
     name: row.name as string,
+    categoryIds: [],
+    categoryNames: [],
     priceTiers: [],
     imageUrls: [],
     variants: [],
     crossProductPromotions: [],
   };
 }
+
+const PRODUCT_SELECT = `SELECT products.* FROM products`;
 
 function buildPromotions(
   promos: Row[],
@@ -47,16 +51,30 @@ function buildPromotions(
 }
 
 export async function getAllProducts(): Promise<Product[]> {
-  const [prodRes, varRes, tierRes, imgRes, linksRes, promoRes, promoItemRes] =
-    await Promise.all([
-      db.execute("SELECT * FROM products ORDER BY position ASC, name ASC"),
-      db.execute("SELECT * FROM variants ORDER BY position ASC"),
-      db.execute("SELECT * FROM price_tiers ORDER BY position ASC, min_quantity ASC"),
-      db.execute("SELECT * FROM product_images ORDER BY position ASC"),
-      db.execute("SELECT product_id, promotion_id FROM product_promotions"),
-      db.execute("SELECT * FROM promotions ORDER BY position ASC"),
-      db.execute("SELECT * FROM promotion_items ORDER BY position ASC"),
-    ]);
+  const [
+    prodRes,
+    varRes,
+    tierRes,
+    imgRes,
+    linksRes,
+    promoRes,
+    promoItemRes,
+    catRes,
+  ] = await Promise.all([
+    db.execute(`${PRODUCT_SELECT} ORDER BY products.position ASC, products.name ASC`),
+    db.execute("SELECT * FROM variants ORDER BY position ASC"),
+    db.execute("SELECT * FROM price_tiers ORDER BY position ASC, min_quantity ASC"),
+    db.execute("SELECT * FROM product_images ORDER BY position ASC"),
+    db.execute("SELECT product_id, promotion_id FROM product_promotions"),
+    db.execute("SELECT * FROM promotions ORDER BY position ASC"),
+    db.execute("SELECT * FROM promotion_items ORDER BY position ASC"),
+    db.execute(
+      `SELECT pc.product_id, c.id, c.name
+         FROM product_categories pc
+         JOIN categories c ON c.id = pc.category_id
+        ORDER BY c.name ASC`,
+    ),
+  ]);
 
   const promos = buildPromotions(
     promoRes.rows as unknown as Row[],
@@ -113,6 +131,13 @@ export async function getAllProducts(): Promise<Product[]> {
     if (p && promo) p.crossProductPromotions!.push(promo);
   }
 
+  for (const row of catRes.rows as unknown as Row[]) {
+    const p = productsMap.get(row.product_id as string);
+    if (!p) continue;
+    p.categoryIds!.push(row.id as string);
+    p.categoryNames!.push(row.name as string);
+  }
+
   return Array.from(productsMap.values());
 }
 
@@ -130,12 +155,12 @@ export async function getAllPromotions(): Promise<CrossPromotion[]> {
 
 export async function getProduct(id: string): Promise<Product | null> {
   const res = await db.execute({
-    sql: "SELECT * FROM products WHERE id = ?",
+    sql: `${PRODUCT_SELECT} WHERE products.id = ?`,
     args: [id],
   });
   if (res.rows.length === 0) return null;
 
-  const [varRes, tierRes, imgRes, linksRes] = await Promise.all([
+  const [varRes, tierRes, imgRes, linksRes, catRes] = await Promise.all([
     db.execute({
       sql: "SELECT * FROM variants WHERE product_id = ? ORDER BY position ASC",
       args: [id],
@@ -152,9 +177,22 @@ export async function getProduct(id: string): Promise<Product | null> {
       sql: "SELECT promotion_id FROM product_promotions WHERE product_id = ?",
       args: [id],
     }),
+    db.execute({
+      sql: `SELECT c.id, c.name
+              FROM product_categories pc
+              JOIN categories c ON c.id = pc.category_id
+             WHERE pc.product_id = ?
+             ORDER BY c.name ASC`,
+      args: [id],
+    }),
   ]);
 
   const product = readProduct(res.rows[0] as unknown as Row);
+
+  for (const row of catRes.rows as unknown as Row[]) {
+    product.categoryIds!.push(row.id as string);
+    product.categoryNames!.push(row.name as string);
+  }
 
   for (const row of varRes.rows as unknown as Row[]) {
     product.variants!.push({

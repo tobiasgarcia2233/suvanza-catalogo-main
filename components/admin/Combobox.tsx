@@ -15,6 +15,7 @@ interface ComboboxProps<T extends ComboboxOption> {
   options: T[];
   placeholder?: string;
   allowCustom?: boolean;
+  customLabel?: string;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ export default function Combobox<T extends ComboboxOption>({
   options,
   placeholder = "Buscar...",
   allowCustom = true,
+  customLabel = "ID manual",
   className = "",
 }: ComboboxProps<T>) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -142,7 +144,7 @@ export default function Combobox<T extends ComboboxOption>({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Buscar o escribir ID manual..."
+              placeholder={`Buscar o escribir ${customLabel}...`}
               className="w-full bg-transparent text-sm outline-none"
             />
           </div>
@@ -155,7 +157,7 @@ export default function Combobox<T extends ComboboxOption>({
                     onClick={commitCustom}
                     className="text-left w-full hover:text-gray-900"
                   >
-                    Usar &quot;<span className="font-medium">{query}</span>&quot; como ID manual
+                    Usar &quot;<span className="font-medium">{query}</span>&quot; como {customLabel}
                   </button>
                 ) : (
                   "Sin resultados."
@@ -195,7 +197,7 @@ export default function Combobox<T extends ComboboxOption>({
                     onClick={commitCustom}
                     className="w-full px-3 py-1.5 text-left text-xs text-gray-500 hover:text-gray-900"
                   >
-                    Usar &quot;<span className="font-medium">{query}</span>&quot; como ID manual
+                    Usar &quot;<span className="font-medium">{query}</span>&quot; como {customLabel}
                   </button>
                 </li>
               )}

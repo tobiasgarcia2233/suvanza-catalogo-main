@@ -6,7 +6,7 @@ import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
 import type { Seller } from "@/lib/sellerQueries";
 
-type SellerWithStats = Seller & { productsSold: number };
+type SellerWithStats = Seller & { productsSold: number; cartsBuilt: number };
 
 export default function SellersManager({
   initialSellers,
@@ -35,7 +35,10 @@ export default function SellersManager({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "No se pudo crear.");
-      setSellers((prev) => [{ ...data.seller, productsSold: 0 }, ...prev]);
+      setSellers((prev) => [
+        { ...data.seller, productsSold: 0, cartsBuilt: 0 },
+        ...prev,
+      ]);
       setName("");
       router.refresh();
     } catch (err) {
@@ -116,6 +119,7 @@ export default function SellersManager({
             <tr>
               <th className="text-left py-2 px-4">Nombre</th>
               <th className="text-left py-2 px-4">Link de acceso</th>
+              <th className="text-right py-2 px-4">Carros armados</th>
               <th className="text-right py-2 px-4">Productos vendidos</th>
               <th className="text-right py-2 px-4"></th>
             </tr>
@@ -126,6 +130,9 @@ export default function SellersManager({
                 <td className="py-2 px-4 font-medium">{seller.name}</td>
                 <td className="py-2 px-4">
                   <code className="text-xs text-gray-600">/{seller.slug}</code>
+                </td>
+                <td className="py-2 px-4 text-right tabular-nums">
+                  {seller.cartsBuilt}
                 </td>
                 <td className="py-2 px-4 text-right tabular-nums">
                   {seller.productsSold}
@@ -164,7 +171,7 @@ export default function SellersManager({
             ))}
             {sellers.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-6 px-4 text-center text-gray-400">
+                <td colSpan={5} className="py-6 px-4 text-center text-gray-400">
                   Todavía no hay vendedores con acceso.
                 </td>
               </tr>

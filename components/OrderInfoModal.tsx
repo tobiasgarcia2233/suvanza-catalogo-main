@@ -24,7 +24,7 @@ export function OrderInfoModal({
   const router = useRouter();
 
   const { isOrderInfoModalOpen, closeOrderInfoModal, closeCart } = useUIStore();
-  const { items, subtotal, total, clearCart, mode, originalOrder } =
+  const { items, subtotal, total, clearCart, mode, originalOrder, editSellerSlug } =
     useCartStore();
 
   const [buyerName, setBuyerName] = useState("");
@@ -33,7 +33,8 @@ export function OrderInfoModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const { autoApplyPromos } = useCartStore.getState();
+  // Legacy order metadata describes the purchase, never an evaluation mode.
+  const autoApplyPromos = items.some((item) => item.isPromo);
 
   useEffect(() => {
     if (isOrderInfoModalOpen) {
@@ -75,6 +76,7 @@ export function OrderInfoModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (useCartStore.getState().comboSelection) return;
     if (!buyerName || !buyerDni || !buyerPhone) {
       setError("Por favor, complete todos los campos.");
       return;
@@ -90,7 +92,13 @@ export function OrderInfoModal({
         id: String(item.promoId ?? item.id),
         title: item.name,
         quantity: item.quantity,
-      }));
+      }))
+      .reduce((promos, promo) => {
+        const existing = promos.find((entry) => entry.id === promo.id);
+        if (existing) existing.quantity += promo.quantity;
+        else promos.push(promo);
+        return promos;
+      }, []);
 
     // ====================== PAYLOAD BUILDER LOGIC START ======================
     // This logic "unrolls" promos into their constituent items for the backend.
@@ -159,7 +167,9 @@ export function OrderInfoModal({
 
     const isEditing = mode === "editing" && originalOrder;
     const endpoint = isEditing
-      ? `/api/orders/${originalOrder.id}`
+      ? editSellerSlug
+        ? `/api/orders/${originalOrder.id}?sellerSlug=${encodeURIComponent(editSellerSlug)}`
+        : `/api/orders/${originalOrder.id}`
       : "/api/orders";
     const method = isEditing ? "PATCH" : "POST";
 

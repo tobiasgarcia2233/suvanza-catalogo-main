@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
 import {
@@ -8,6 +8,7 @@ import {
   CheckCircle,
   CreditCard,
   Loader2,
+  MoreVertical,
   Pencil,
   Printer,
   StickyNote,
@@ -17,6 +18,7 @@ import { useCartStore } from "@/store/cartStore";
 import { useUIStore } from "@/store/uiStore";
 import NotesModal from "./NotesModal";
 import PaymentMethodModal from "./PaymentMethodModal";
+import PrintOrderModal from "./PrintOrderModal";
 
 interface OrderRowProps {
   order: Order;
@@ -31,8 +33,29 @@ export function OrderRow({ order }: OrderRowProps) {
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const { loadOrderForEdit } = useCartStore();
   const { openConfirmationModal, openCart } = useUIStore();
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [menuOpen]);
 
   const isCompleted = order.status === "COMPLETED";
   const anyBusy = busy !== null || isPending;
@@ -62,6 +85,7 @@ export function OrderRow({ order }: OrderRowProps) {
   };
 
   const handleEditClick = () => {
+    setMenuOpen(false);
     if (isCompleted || anyBusy) return;
     setBusy("editing");
     loadOrderForEdit(order);
@@ -70,6 +94,7 @@ export function OrderRow({ order }: OrderRowProps) {
   };
 
   const handleDeleteClick = () => {
+    setMenuOpen(false);
     openConfirmationModal({
       title: "Confirmar Eliminación",
       message: `¿Eliminar la orden de ${order.buyer_details.name}?`,
@@ -90,6 +115,7 @@ export function OrderRow({ order }: OrderRowProps) {
   };
 
   const handleMarkPaid = () => {
+    setMenuOpen(false);
     openConfirmationModal({
       title: "Marcar como pagada",
       message: `¿Confirmás el cobro de la orden de ${order.buyer_details.name}?`,
@@ -110,10 +136,6 @@ export function OrderRow({ order }: OrderRowProps) {
         }
       },
     });
-  };
-
-  const openPrintView = () => {
-    window.open(`/orders/${order.id}/print`, "_blank");
   };
 
   const spinner = <Loader2 size={18} className="animate-spin" />;
@@ -168,83 +190,123 @@ export function OrderRow({ order }: OrderRowProps) {
           </span>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={() => setNotesOpen(true)}
-            className={`p-2 rounded-md transition disabled:opacity-50 ${
-              hasNotes
-                ? "bg-amber-500 hover:bg-amber-600 text-white"
-                : "bg-gray-100 hover:bg-gray-200 text-gray-600"
-            }`}
-            aria-label="Nota"
-            title={hasNotes ? "Ver / editar nota" : "Agregar nota"}
-            disabled={anyBusy}
-          >
-            <StickyNote size={18} />
-          </button>
-
-          <button
-            onClick={() => setPaymentOpen(true)}
-            className={`p-2 rounded-md transition disabled:opacity-50 ${
-              hasPayment
-                ? "bg-indigo-500 hover:bg-indigo-600 text-white"
-                : "bg-gray-100 hover:bg-gray-200 text-gray-600"
-            }`}
-            aria-label="Medios de pago"
-            title={
-              hasPayment
-                ? paymentsList
-                    .map(
-                      (p) =>
-                        `${p.method}: $${p.amount.toLocaleString("es-AR")}`,
-                    )
-                    .join("\n")
-                : "Cargar medios de pago"
-            }
-            disabled={anyBusy}
-          >
-            <CreditCard size={18} />
-          </button>
-
-          <button
-            onClick={openPrintView}
-            className="bg-gray-100 hover:bg-gray-200 p-2 rounded-md text-gray-600 transition disabled:opacity-50"
-            aria-label="Imprimir"
-            title="Ver / imprimir"
-            disabled={anyBusy}
-          >
-            <Printer size={18} />
-          </button>
-
-          <button
-            onClick={handleEditClick}
-            className="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 p-2 rounded-md text-text-secondary transition disabled:cursor-not-allowed"
-            aria-label="Editar"
-            disabled={isCompleted || anyBusy}
-          >
-            {busy === "editing" ? spinner : <Pencil size={18} />}
-          </button>
-
-          {!isCompleted && (
+        <div className="flex justify-end">
+          <div ref={menuRef} className="relative">
             <button
-              onClick={handleMarkPaid}
-              className="bg-green-500 hover:bg-green-600 p-2 rounded-md text-white transition disabled:opacity-50"
-              aria-label="Marcar como pagada"
-              title="Marcar como pagada"
+              onClick={() => setMenuOpen((open) => !open)}
+              className="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 p-2 rounded-md text-gray-600 transition disabled:cursor-not-allowed"
+              aria-label="Opciones"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
               disabled={anyBusy}
             >
-              {busy === "paying" ? spinner : <Check size={18} />}
+              {anyBusy ? spinner : <MoreVertical size={18} />}
             </button>
-          )}
 
-          <button
-            onClick={handleDeleteClick}
-            className="bg-red-500 hover:bg-red-600 p-2 rounded-md text-white transition disabled:opacity-50"
-            aria-label="Eliminar"
-            disabled={anyBusy}
-          >
-            {busy === "deleting" ? spinner : <Trash2 size={18} />}
-          </button>
+            {!anyBusy && (hasNotes || hasPayment || isCompleted) && (
+              <span className="top-full left-1/2 absolute flex items-center gap-1 mt-1 -translate-x-1/2">
+                {hasNotes && (
+                  <span
+                    className="bg-orange-500 rounded-full w-2 h-2"
+                    title="Tiene nota"
+                  />
+                )}
+                {hasPayment && (
+                  <span
+                    className="bg-violet-500 rounded-full w-2 h-2"
+                    title="Medio de pago cargado"
+                  />
+                )}
+                {isCompleted && (
+                  <span
+                    className="bg-green-500 rounded-full w-2 h-2"
+                    title="Pagada"
+                  />
+                )}
+              </span>
+            )}
+
+            {menuOpen && (
+              <div
+                role="menu"
+                className="right-0 z-10 absolute bg-surface shadow-lg mt-1 py-1 border border-border rounded-md w-56"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setNotesOpen(true);
+                  }}
+                  className="flex items-center gap-2 hover:bg-background px-3 py-2 w-full text-sm text-left transition"
+                >
+                  <StickyNote
+                    size={16}
+                    className={hasNotes ? "text-orange-500" : "text-text-secondary"}
+                  />
+                  {hasNotes ? "Ver / editar nota" : "Agregar nota"}
+                </button>
+
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setPaymentOpen(true);
+                  }}
+                  className="flex items-center gap-2 hover:bg-background px-3 py-2 w-full text-sm text-left transition"
+                >
+                  <CreditCard
+                    size={16}
+                    className={hasPayment ? "text-violet-500" : "text-text-secondary"}
+                  />
+                  {hasPayment ? `Medios de pago (${paymentsLabel})` : "Cargar medios de pago"}
+                </button>
+
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setPrintOpen(true);
+                  }}
+                  className="flex items-center gap-2 hover:bg-background px-3 py-2 w-full text-sm text-left transition"
+                >
+                  <Printer size={16} className="text-text-secondary" />
+                  Ver / imprimir
+                </button>
+
+                <button
+                  role="menuitem"
+                  onClick={handleEditClick}
+                  disabled={isCompleted}
+                  className="flex items-center gap-2 hover:bg-background disabled:opacity-40 disabled:hover:bg-transparent px-3 py-2 w-full text-sm text-left transition disabled:cursor-not-allowed"
+                >
+                  <Pencil size={16} className="text-text-secondary" />
+                  Editar pedido
+                </button>
+
+                {!isCompleted && (
+                  <button
+                    role="menuitem"
+                    onClick={handleMarkPaid}
+                    className="flex items-center gap-2 hover:bg-background px-3 py-2 w-full text-green-700 text-sm text-left transition"
+                  >
+                    <Check size={16} />
+                    Marcar como pagada
+                  </button>
+                )}
+
+                <div className="my-1 border-border border-t" />
+
+                <button
+                  role="menuitem"
+                  onClick={handleDeleteClick}
+                  className="flex items-center gap-2 hover:bg-red-50 px-3 py-2 w-full text-red-600 text-sm text-left transition"
+                >
+                  <Trash2 size={16} />
+                  Eliminar
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -264,6 +326,11 @@ export function OrderRow({ order }: OrderRowProps) {
         initialPayments={order.payments ?? null}
         buyerName={order.buyer_details.name}
         onSaved={refresh}
+      />
+      <PrintOrderModal
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        order={order}
       />
     </>
   );

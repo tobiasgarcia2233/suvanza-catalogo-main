@@ -1,18 +1,6 @@
-import { notFound } from "next/navigation";
-import { getOrder } from "@/lib/orderQueries";
-import PrintButton from "./PrintButton";
+import type { Order } from "@/types";
 
-export const dynamic = "force-dynamic";
-
-export default async function OrderPrintPage({
-  params,
-}: {
-  params: Promise<{ orderId: string }>;
-}) {
-  const { orderId } = await params;
-  const order = await getOrder(orderId);
-  if (!order) notFound();
-
+export function OrderPrintContent({ order }: { order: Order }) {
   const created = new Date(order.created_at);
   const dateStr = created.toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -27,16 +15,13 @@ export default async function OrderPrintPage({
   const subtotal = order.total + order.discounted_amount;
 
   return (
-    <div className="mx-auto p-8 max-w-3xl text-black bg-white">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Pedido</h1>
-          <p className="text-sm text-gray-600">ID: {order.id}</p>
-          <p className="text-sm text-gray-600">
-            {dateStr} — {timeStr} hs
-          </p>
-        </div>
-        <PrintButton />
+    <div className="p-8 max-w-3xl mx-auto text-black bg-white">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Pedido</h1>
+        <p className="text-sm text-gray-600">ID: {order.id}</p>
+        <p className="text-sm text-gray-600">
+          {dateStr} — {timeStr} hs
+        </p>
       </div>
 
       <section className="mb-6 grid grid-cols-2 gap-6">
@@ -152,13 +137,6 @@ export default async function OrderPrintPage({
           <span className="font-bold">${order.total.toLocaleString("es-AR")}</span>
         </p>
       </section>
-
-      <style>{`
-        @media print {
-          @page { margin: 14mm; }
-          button { display: none !important; }
-        }
-      `}</style>
     </div>
   );
 }

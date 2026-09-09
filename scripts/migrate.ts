@@ -25,9 +25,22 @@ async function applySchema() {
   }
   console.log(`✓ Applied schema (${statements.length} statements)`);
 
+  // Backfill the product ↔ category join table from the old single-category
+  // column, then drop it. Safe to run repeatedly: no-op once the column is gone.
+  try {
+    await db.execute(
+      `INSERT OR IGNORE INTO product_categories (product_id, category_id)
+       SELECT id, category_id FROM products WHERE category_id IS NOT NULL`,
+    );
+    console.log("✓ Backfilled product_categories from products.category_id");
+  } catch {
+    /* products.category_id already dropped — nothing to backfill */
+  }
+
   // Idempotent column drops for schemas migrated from older versions.
   const legacy: [string, string][] = [
     ["products", "category"],
+    ["products", "category_id"],
     ["products", "tags"],
     ["products", "description"],
     ["price_tiers", "label"],
@@ -67,6 +80,7 @@ async function wipeData() {
       "DELETE FROM price_tiers",
       "DELETE FROM product_images",
       "DELETE FROM variants",
+      "DELETE FROM product_categories",
       "DELETE FROM products",
     ],
     "write",

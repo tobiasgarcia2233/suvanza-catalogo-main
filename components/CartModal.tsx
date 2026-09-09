@@ -9,6 +9,8 @@ import { CartItem } from "./CartItem";
 import { CartFooter } from "./CartFooter";
 import { QuickAddModal } from "./QuickAddModal";
 import { useProductsStore } from "@/store/productsStore";
+import { ComboSelectionDialog } from "./ComboSelectionDialog";
+import { CartPricingInformation } from "./CartPricingInformation";
 
 export function CartModal() {
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -16,7 +18,7 @@ export function CartModal() {
 
   const { isCartOpen, closeCart } = useUIStore();
   // --- 1. Get the mode and clearCart action ---
-  const { items, mode, clearCart } = useCartStore();
+  const { items, total, mode, clearCart } = useCartStore();
   const products = useProductsStore((s) => s.products);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
@@ -110,7 +112,7 @@ export function CartModal() {
               <>
                 <div className="flex-grow py-4 overflow-y-auto">
                   {items.map((item) => (
-                    <CartItem key={item.id} item={item} />
+                    <CartItem key={item.cartLineKey ?? item.id} item={item} />
                   ))}
                   <button
                     onClick={() => setIsQuickAddOpen(true)}
@@ -119,6 +121,7 @@ export function CartModal() {
                     <Plus size={16} />
                     Añadir más productos
                   </button>
+                  <CartPricingInformation items={items} total={total} />
                 </div>
                 <CartFooter />
               </>
@@ -132,6 +135,7 @@ export function CartModal() {
         onClose={() => setIsQuickAddOpen(false)}
         products={products}
       />
+      <ComboSelectionDialog />
     </>
   );
 }

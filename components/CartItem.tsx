@@ -11,6 +11,7 @@ interface CartItemProps {
 }
 
 export function CartItem({ item }: CartItemProps) {
+  const lineId = item.cartLineKey ?? item.id;
   const {
     updateQuantity,
     removeFromCart,
@@ -32,13 +33,13 @@ export function CartItem({ item }: CartItemProps) {
   const handleQuantityCommit = (value: number | null) => {
     const newQuantity = value ?? item.quantity;
     if (newQuantity !== item.quantity) {
-      updateQuantity(item.id, newQuantity);
+      updateQuantity(lineId, newQuantity);
     }
   };
 
   const handlePriceCommit = (value: number | null) => {
     if (value?.toFixed(0) !== effectivePricePerUnit.toFixed(0)) {
-      setItemManualPricePerUnit(item.id, value);
+      setItemManualPricePerUnit(lineId, value);
     }
   };
 
@@ -68,6 +69,11 @@ export function CartItem({ item }: CartItemProps) {
               {item.brand}
             </p>
             <h3 className="font-semibold whitespace-nowrap">{item.name}</h3>
+            {item.comboSource === "automatic" && (item.manualPercentage > 0 || item.manualPricePerUnit != null) && (
+              <p className="mt-2 text-lg leading-relaxed text-text-secondary">
+                Este combo se conserva mientras tenga un ajuste manual.
+              </p>
+            )}
             {item.includedItems && item.includedItems.length > 0 && (
               <p className="text-text-secondary text-xs">
                 {item.includedItems
@@ -80,10 +86,10 @@ export function CartItem({ item }: CartItemProps) {
           <div className="flex justify-end items-center gap-6 w-full">
             {/* Percentage Input */}
             <NumberStepper
-              id={`discount-${item.id}`}
+              id={`discount-${lineId}`}
               value={discountValue}
               onCommit={(value) =>
-                setItemManualDiscountPercentage(item.id, value)
+                setItemManualDiscountPercentage(lineId, value)
               }
               min={0}
               max={100}
@@ -97,7 +103,7 @@ export function CartItem({ item }: CartItemProps) {
 
             {/* Price Per Unit Input — bloqueado para promos */}
             <NumberStepper
-              id={`price-${item.id}`}
+              id={`price-${lineId}`}
               value={effectivePricePerUnit}
               onCommit={handlePriceCommit}
               min={0}
@@ -121,7 +127,7 @@ export function CartItem({ item }: CartItemProps) {
           />
 
           <button
-            onClick={() => removeFromCart(item.id)}
+            onClick={() => removeFromCart(lineId)}
             className="text-text-secondary hover:text-red-500"
           >
             <X size={20} />
@@ -152,10 +158,10 @@ export function CartItem({ item }: CartItemProps) {
           <div className="flex justify-end items-center gap-6 w-full">
             {/* Percentage Input */}
             <NumberStepper
-              id={`discount-${item.id}`}
+              id={`discount-${lineId}`}
               value={discountValue}
               onCommit={(value) =>
-                setItemManualDiscountPercentage(item.id, value)
+                setItemManualDiscountPercentage(lineId, value)
               }
               min={0}
               max={100}
@@ -169,7 +175,7 @@ export function CartItem({ item }: CartItemProps) {
 
             {/* Price Per Unit Input */}
             <NumberStepper
-              id={`price-${item.id}`}
+              id={`price-${lineId}`}
               value={effectivePricePerUnit}
               onCommit={handlePriceCommit}
               min={0}
@@ -193,7 +199,7 @@ export function CartItem({ item }: CartItemProps) {
           />
 
           <button
-            onClick={() => removeFromCart(item.id)}
+            onClick={() => removeFromCart(lineId)}
             className="text-text-secondary hover:text-red-500"
           >
             <X size={20} />

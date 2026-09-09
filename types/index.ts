@@ -12,10 +12,17 @@ export interface Variant {
   priceTiers?: PriceTier[];
 }
 
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export interface Product {
   id: number | string;
   brand?: string;
   name: string;
+  categoryIds?: string[];
+  categoryNames?: string[];
   priceTiers: PriceTier[];
   imageUrls: string[];
   variants?: Variant[];
@@ -34,6 +41,10 @@ export interface CartItem extends Product {
   isPromo?: boolean;
   includedItems?: CartItem[];
   manualPricePerUnit?: number | null;
+  // Automatic regrouping is distinct from explicitly purchasing a bundle.
+  comboSource?: "automatic" | "explicit";
+  comboChoiceKey?: string;
+  cartLineKey?: string;
 }
 
 export type PaymentMethod =
@@ -104,5 +115,6 @@ export interface CrossPromotion {
     pricePerUnit: number;
     notes?: string;
     matchBy?: string;
+    brand?: string;
   }[];
 }

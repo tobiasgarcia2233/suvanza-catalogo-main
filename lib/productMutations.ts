@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import type { Product, Variant, PriceTier } from "@/types";
+import { findOrCreateCategory } from "./categoryQueries";
 
 function slugify(s: string) {
   return s
@@ -14,6 +15,8 @@ export type ProductInput = {
   id?: string;
   brand?: string | null;
   name: string;
+  /** Category names — resolved/created on save. A product can have many. */
+  categories?: string[];
   position?: number;
   imageUrls?: string[];
   priceTiers?: PriceTier[];
@@ -49,16 +52,18 @@ async function persistProduct(
 ): Promise<void> {
   const now = new Date().toISOString();
 
+  const categoryNames = Array.from(
+    new Set((input.categories ?? []).map((c) => c.trim()).filter(Boolean)),
+  );
+  const categoryIds: string[] = [];
+  for (const name of categoryNames) {
+    categoryIds.push((await findOrCreateCategory(name)).id);
+  }
+
   if (isUpdate) {
     await db.execute({
       sql: `UPDATE products SET brand=?, name=?, position=?, updated_at=? WHERE id=?`,
-      args: [
-        input.brand ?? null,
-        input.name,
-        input.position ?? 0,
-        now,
-        id,
-      ],
+      args: [input.brand ?? null, input.name, input.position ?? 0, now, id],
     });
     // Cascading children — wipe and reinsert
     await db.batch(
@@ -67,18 +72,21 @@ async function persistProduct(
         { sql: "DELETE FROM price_tiers WHERE product_id = ?", args: [id] },
         { sql: "DELETE FROM variants WHERE product_id = ?", args: [id] },
         { sql: "DELETE FROM product_promotions WHERE product_id = ?", args: [id] },
+        { sql: "DELETE FROM product_categories WHERE product_id = ?", args: [id] },
       ],
       "write",
     );
   } else {
     await db.execute({
       sql: `INSERT INTO products (id, brand, name, position) VALUES (?, ?, ?, ?)`,
-      args: [
-        id,
-        input.brand ?? null,
-        input.name,
-        input.position ?? 0,
-      ],
+      args: [id, input.brand ?? null, input.name, input.position ?? 0],
+    });
+  }
+
+  for (const categoryId of categoryIds) {
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO product_categories (product_id, category_id) VALUES (?, ?)`,
+      args: [id, categoryId],
     });
   }
 

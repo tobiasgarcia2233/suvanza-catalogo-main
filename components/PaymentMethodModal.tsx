@@ -159,7 +159,7 @@ export default function PaymentMethodModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-xl w-full max-w-xl p-6 relative"
+        className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6 relative"
       >
         <button
           onClick={onClose}
@@ -212,7 +212,7 @@ export default function PaymentMethodModal({
                 step={100}
                 allowEmpty
                 placeholder="Monto"
-                className="w-32 text-sm"
+                className="w-42 text-sm"
                 inputClassName="text-right"
                 aria-label="Monto"
               />
@@ -226,9 +226,8 @@ export default function PaymentMethodModal({
                 step={1}
                 allowEmpty
                 disabled={orderTotal <= 0}
-                placeholder="%"
                 suffix="%"
-                className="w-24 text-sm"
+                className="w-42 text-sm"
                 inputClassName="text-right"
                 aria-label="Porcentaje"
               />

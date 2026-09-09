@@ -1,21 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { isSellerPagePath } from "@/lib/sellerRoutes";
 
 const SESSION_COOKIE = "suvanza_session";
 
+// Order endpoints a seller's page calls directly with their own slug; the
+// route handlers themselves verify the order belongs to that seller before
+// doing anything, so these can stay open without an admin session.
+function isPublicOrdersApi(pathname: string, method: string) {
+  if (pathname === "/api/orders") {
+    return method === "GET" || method === "POST";
+  }
+  if (/^\/api\/orders\/[^/]+$/.test(pathname)) {
+    return method === "PATCH" || method === "DELETE";
+  }
+  return false;
+}
+
 // Paths that must stay reachable without a session.
-function isPublic(pathname: string) {
+function isPublic(pathname: string, method: string) {
   return (
     pathname === "/" ||
     pathname.startsWith("/api/auth/") ||
-    pathname === "/favicon.ico"
+    pathname === "/favicon.ico" ||
+    isPublicOrdersApi(pathname, method) ||
+    isSellerPagePath(pathname)
   );
 }
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (isPublic(pathname)) return NextResponse.next();
+  if (isPublic(pathname, req.method)) return NextResponse.next();
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const secret = process.env.AUTH_SECRET;

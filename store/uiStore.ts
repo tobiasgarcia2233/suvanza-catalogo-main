@@ -24,6 +24,12 @@ interface UIState {
   isConfirmationModalOpen: boolean;
   confirmationModalProps: ConfirmationModalProps | null;
 
+  // Seller "Mis ventas" panel — its open state lives here (rather than as
+  // local state on the panel itself) so the navbar link can toggle it too.
+  isSellerOrdersOpen: boolean;
+  openSellerOrders: () => void;
+  closeSellerOrders: () => void;
+
   // 2. Add new state for the gallery modal
   isGalleryModalOpen: boolean;
   galleryModalContent: GalleryModalContent | null;
@@ -52,6 +58,10 @@ export const useUIStore = create<UIState>((set) => ({
   confirmationModalProps: null,
   isGalleryModalOpen: false, // 4. Initialize new state
   galleryModalContent: null, // 4. Initialize new state
+  isSellerOrdersOpen: false,
+
+  openSellerOrders: () => set({ isSellerOrdersOpen: true }),
+  closeSellerOrders: () => set({ isSellerOrdersOpen: false }),
 
   openProductDetail: (product) =>
     set({

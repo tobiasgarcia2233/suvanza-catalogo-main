@@ -3,6 +3,12 @@
 
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
   brand TEXT,
@@ -10,6 +16,12 @@ CREATE TABLE IF NOT EXISTS products (
   position INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS product_categories (
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  PRIMARY KEY (product_id, category_id)
 );
 
 CREATE TABLE IF NOT EXISTS variants (
@@ -99,3 +111,5 @@ CREATE INDEX IF NOT EXISTS idx_price_tiers_product ON price_tiers(product_id);
 CREATE INDEX IF NOT EXISTS idx_price_tiers_variant ON price_tiers(variant_id);
 CREATE INDEX IF NOT EXISTS idx_variants_product ON variants(product_id);
 CREATE INDEX IF NOT EXISTS idx_promotion_items_promo ON promotion_items(promotion_id);
+CREATE INDEX IF NOT EXISTS idx_product_categories_product ON product_categories(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_categories_category ON product_categories(category_id);

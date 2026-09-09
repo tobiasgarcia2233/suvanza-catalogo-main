@@ -108,9 +108,12 @@ export async function fetchRecentOrders(
 }
 
 export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
+  // Unlike the admin dashboards, this keeps every order for the seller —
+  // completed sales stay visible permanently instead of disappearing once
+  // they're paid or transferred to Odoo.
   const res = await db.execute({
     sql: `SELECT * FROM orders
-          WHERE LOWER(seller_name) = LOWER(?) AND transferred_to_odoo = 0
+          WHERE LOWER(seller_name) = LOWER(?)
           ORDER BY created_at DESC`,
     args: [sellerName],
   });
@@ -267,7 +270,10 @@ export async function fetchOrdersForOdoo(options: {
 
 export async function getSellerSalesStats(
   sellerName: string,
-): Promise<{ productsSold: number }> {
+): Promise<{ productsSold: number; cartsBuilt: number }> {
+  // "Carro cerrado" = the sale closed: the seller received payment and
+  // handed over the product, i.e. status COMPLETED. Each order row counts
+  // once, even if the same buyer ordered more than once.
   const res = await db.execute({
     sql: `SELECT items FROM orders
           WHERE LOWER(seller_name) = LOWER(?) AND status = 'COMPLETED'`,
@@ -280,7 +286,7 @@ export async function getSellerSalesStats(
     productsSold += items.reduce((sum, it) => sum + (it.quantity || 0), 0);
   }
 
-  return { productsSold };
+  return { productsSold, cartsBuilt: res.rows.length };
 }
 
 export async function bulkSetTransferred(

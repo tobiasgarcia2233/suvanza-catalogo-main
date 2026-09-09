@@ -62,6 +62,15 @@
 }
 
 @layer base {
+  /* Reserve the vertical scrollbar's space always, so the visible viewport
+     width never shifts when a shorter/taller product list (e.g. from
+     filtering) makes the scrollbar appear or disappear — otherwise the
+     fixed navbar's flex row was resizing (and squeezing the logo) each
+     time that toggled. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     @apply bg-background text-text-primary;
     font-family: var(--font-sans);
