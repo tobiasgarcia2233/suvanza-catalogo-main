@@ -3,6 +3,7 @@ import Image from "next/image";
 import FullScreenButton from "@/components/FullScreenButton";
 import NavLinks from "@/components/NavLinks";
 import SellerNavLinks from "@/components/SellerNavLinks";
+import MobileNav from "@/components/MobileNav";
 import AdminSignOut from "@/app/admin/AdminSignOut";
 import { readSessionFromCookie } from "@/lib/auth";
 
@@ -27,12 +28,16 @@ export default async function Navbar() {
           />
         </Link>
 
-        {session ? <NavLinks /> : <SellerNavLinks />}
+        <div className="hidden lg:contents">
+          {session ? <NavLinks /> : <SellerNavLinks />}
 
-        <div className="ml-auto flex items-center gap-3">
-          <FullScreenButton />
-          {session && <AdminSignOut />}
+          <div className="ml-auto flex items-center gap-3">
+            <FullScreenButton />
+            {session && <AdminSignOut />}
+          </div>
         </div>
+
+        <MobileNav session={!!session} />
       </nav>
     </header>
   );

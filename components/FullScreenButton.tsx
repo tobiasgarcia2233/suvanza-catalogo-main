@@ -37,8 +37,10 @@ const ExitFullscreenIcon = () => (
 
 export default function FullScreenButton({
   className = "",
+  withLabel = false,
 }: {
   className?: string;
+  withLabel?: boolean;
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -69,6 +71,21 @@ export default function FullScreenButton({
       });
     }
   };
+
+  const label = isFullscreen ? "Reducir" : "Agrandar";
+
+  if (withLabel) {
+    return (
+      <button
+        onClick={toggleFullScreen}
+        className={`flex w-full items-center gap-3 rounded-button px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-background hover:text-text-primary ${className}`}
+        aria-label={label}
+      >
+        {isFullscreen ? <ExitFullscreenIcon /> : <EnterFullscreenIcon />}
+        <span>{label}</span>
+      </button>
+    );
+  }
 
   return (
     <button
