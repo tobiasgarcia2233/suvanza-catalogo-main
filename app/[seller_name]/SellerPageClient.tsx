@@ -6,14 +6,12 @@ import { CatalogView } from "@/components/CatalogView";
 import { ViewModeSwitch, ViewMode } from "@/components/ViewModeSwitch";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { CategoryFilterBar } from "@/components/CategoryFilterBar";
-import { CartModal } from "@/components/CartModal";
-import { OrderInfoModal } from "@/components/OrderInfoModal";
+import { CartFab } from "@/components/CartFab";
 import { SellerOrdersPanel } from "@/components/SellerOrdersPanel";
 import ProductsHydrator from "@/components/ProductsHydrator";
 import type { Product, CrossPromotion, Category } from "@/types";
 import { useUIStore } from "@/store/uiStore";
-import { useCartStore } from "@/store/cartStore";
-import { ShoppingCart, CheckCircle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import Image from "next/image";
 
 export default function SellerPageClient({
@@ -29,9 +27,7 @@ export default function SellerPageClient({
   promotions: CrossPromotion[];
   categories: Category[];
 }) {
-  const { openCart, isModalOpen } = useUIStore();
-  const { items } = useCartStore();
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const { isModalOpen } = useUIStore();
   const [showSuccess, setShowSuccess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -66,18 +62,6 @@ export default function SellerPageClient({
         </div>
       )}
 
-      <button
-        onClick={openCart}
-        className="right-8 bottom-8 z-50 fixed bg-brand shadow-lg p-4 rounded-full text-white hover:scale-110 transition-transform duration-200"
-      >
-        <ShoppingCart size={28} />
-        {totalItems > 0 && (
-          <span className="-top-2 -right-2 absolute flex justify-center items-center bg-red-500 rounded-full w-7 h-7 font-semibold text-sm">
-            {totalItems}
-          </span>
-        )}
-      </button>
-
       <div className="mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-screen-2xl">
         <div className="flex justify-between items-center mb-8">
           <Image
@@ -107,11 +91,7 @@ export default function SellerPageClient({
       </div>
 
       <ProductDetailModal />
-      <CartModal />
-      <OrderInfoModal
-        sellerName={sellerName}
-        onOrderSuccess={triggerSuccessAnimation}
-      />
+      <CartFab sellerName={sellerName} onOrderSuccess={triggerSuccessAnimation} />
       <SellerOrdersPanel sellerSlug={sellerSlug} />
     </div>
   );

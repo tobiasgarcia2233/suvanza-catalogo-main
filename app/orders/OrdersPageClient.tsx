@@ -4,12 +4,9 @@ import { useEffect, useState } from "react";
 import type { Order, Product, CrossPromotion } from "@/types";
 import { SearchableOrderList } from "@/components/SearchableOrderList";
 import { QuickAddModal } from "@/components/QuickAddModal";
-import { CartModal } from "@/components/CartModal";
-import { OrderInfoModal } from "@/components/OrderInfoModal";
+import { CartFab } from "@/components/CartFab";
 import ProductsHydrator from "@/components/ProductsHydrator";
-import { Loader2, Plus, ShoppingCart } from "lucide-react";
-import { useCartStore } from "@/store/cartStore";
-import { useUIStore } from "@/store/uiStore";
+import { Loader2, Plus } from "lucide-react";
 
 interface OrdersPageClientProps {
   initialOrders: Order[];
@@ -20,9 +17,6 @@ export function OrdersPageClient({ initialOrders }: OrdersPageClientProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [promotions, setPromotions] = useState<CrossPromotion[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
-  const { openCart } = useUIStore();
-  const { items } = useCartStore();
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
   // The catalog only feeds "Nuevo pedido" / order editing — load it once here
   // rather than on the server, so it isn't refetched on every router.refresh().
@@ -75,25 +69,12 @@ export function OrdersPageClient({ initialOrders }: OrdersPageClientProps) {
           <Loader2 size={28} className="animate-spin" />
         )}
       </button>
-      <button
-        onClick={openCart}
-        className="right-8 bottom-8 fixed bg-gray-800 shadow-lg p-4 rounded-full text-white hover:scale-110 transition-transform duration-200"
-      >
-        <ShoppingCart size={28} />
-        {totalItems > 0 && (
-          <span className="-top-2 -right-2 absolute flex justify-center items-center bg-red-500 rounded-full w-7 h-7 font-semibold text-sm">
-            {totalItems}
-          </span>
-        )}
-      </button>
-
       <QuickAddModal
         isOpen={isQuickAddOpen}
         onClose={() => setIsQuickAddOpen(false)}
         products={products}
       />
-      <CartModal />
-      <OrderInfoModal sellerName={"Nico Angelucci"} onOrderSuccess={() => {}} />
+      <CartFab variant="dark" />
     </div>
   );
 }
