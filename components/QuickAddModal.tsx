@@ -1,11 +1,10 @@
-// @ts-nocheck
 "use client";
 
-import { useState, useMemo } from "react";
-import { Product } from "@/types";
+import { useState, useMemo, useEffect } from "react";
+import { CartItem, Product } from "@/types";
 import { useCartStore } from "@/store/cartStore";
 import { useProductsStore } from "@/store/productsStore";
-// MODIFICATION: No longer need useUIStore here
+import { promotionId } from "@/lib/comboRows";
 import { QuickAddRow } from "./QuickAddRow";
 import { NumberStepper } from "./ui/NumberStepper";
 import { X, Search } from "lucide-react";
@@ -25,7 +24,6 @@ export function QuickAddModal({
 }: QuickAddModalProps) {
   const { addMultipleToCart, addCrossPromotionToCart } = useCartStore();
   const promotions = useProductsStore((s) => s.promotions);
-  // MODIFICATION: Removed openCart from here
   const [activeTab, setActiveTab] = useState<QuickAddTab>("products");
   const [searchQuery, setSearchQuery] = useState("");
   const [quantities, setQuantities] = useState<Map<string, number>>(new Map());
@@ -33,15 +31,29 @@ export function QuickAddModal({
     new Map()
   );
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const ordinary = new Map<string, number>();
+    const applied = new Map<string, number>();
+    useCartStore.getState().items.forEach((item) => {
+      const target = item.isPromo ? applied : ordinary;
+      const id = item.isPromo ? promotionId(item) : String(item.id);
+      target.set(id, (target.get(id) ?? 0) + item.quantity);
+    });
+    setQuantities(ordinary);
+    setPromoQuantities(applied);
+  }, [isOpen]);
+
   const allVariants = useMemo(() => {
     return products.flatMap(
       (product) =>
-        product.variants?.map((variant) => ({
+        (product.variants?.length ? product.variants : [product]).map((variant) => ({
           ...variant,
-          brand: product.brand,
+          id: String(variant.id),
+          brand: product.brand ?? "",
           parentName: product.name,
           parentId: product.id,
-        })) || []
+        }))
     );
   }, [products]);
 
@@ -69,77 +81,49 @@ export function QuickAddModal({
   }, [searchQuery, promotions]);
 
   const handleQuantityChange = (variantId: string, newQuantity: number) => {
-    setQuantities(new Map(quantities).set(variantId, newQuantity));
+    setQuantities(new Map(quantities).set(String(variantId), newQuantity));
   };
 
   const handlePromoQuantityChange = (promoId: string, newQuantity: number) => {
-    setPromoQuantities(new Map(promoQuantities).set(promoId, newQuantity));
+    setPromoQuantities(new Map(promoQuantities).set(String(promoId), newQuantity));
   };
 
   const handleAddToCart = () => {
-    let itemsWereAdded = false;
-    const parentProductQuantities = new Map<
-      string | number,
-      { product: Product; quantities: Map<string, number> }
-    >();
+    // Resize existing lines without rebuilding their variants or adjustments.
+    // When several adjusted lines share an ID, remove from the last line first.
+    const resizeExisting = (matches: (item: CartItem) => boolean, desired: number) => {
+      const lines = () => useCartStore.getState().items.filter(matches);
+      const current = lines().reduce((sum, item) => sum + item.quantity, 0);
+      if (!current) return false;
+      let difference = desired - current;
+      while (difference !== 0) {
+        const row = lines().at(-1);
+        if (!row) break;
+        const change = difference > 0 ? difference : -Math.min(row.quantity, -difference);
+        useCartStore.getState().updateQuantity(row.cartLineKey ?? row.id, row.quantity + change);
+        difference -= change;
+      }
+      return true;
+    };
 
     quantities.forEach((quantity, variantId) => {
-      if (quantity > 0) {
-        itemsWereAdded = true;
-        const variantInfo = allVariants.find((v) => v.id === variantId);
-        if (variantInfo && variantInfo.parentId) {
-          const parentProduct = products.find(
-            (p) => p.id === variantInfo.parentId
-          );
-          if (parentProduct) {
-            if (!parentProductQuantities.has(parentProduct.id)) {
-              parentProductQuantities.set(parentProduct.id, {
-                product: parentProduct,
-                quantities: new Map(),
-              });
-            }
-            parentProductQuantities
-              .get(parentProduct.id)!
-              .quantities.set(variantId, quantity);
-          }
-        }
+      if (!Number.isSafeInteger(quantity) || quantity < 0) return;
+      if (resizeExisting((item) => !item.isPromo && String(item.id) === variantId, quantity) || quantity === 0) return;
+      const variantInfo = allVariants.find((variant) => String(variant.id) === variantId);
+      const parentProduct = products.find((product) => product.id === variantInfo?.parentId);
+      if (parentProduct && variantInfo) {
+        addMultipleToCart(parentProduct, new Map([[variantInfo.id, quantity]]));
       }
-    });
-
-    parentProductQuantities.forEach(({ product, quantities }) => {
-      addMultipleToCart(product, quantities);
     });
 
     promoQuantities.forEach((quantity, promoId) => {
-      if (quantity > 0) {
-        const promo = promotions.find((p) => p.id === promoId);
-        if (promo) {
-          itemsWereAdded = true;
-          // Keep any individually-added products; the promo is additive here.
-          addCrossPromotionToCart(promo, quantity, false);
-        }
-      }
+      if (!Number.isSafeInteger(quantity) || quantity < 0) return;
+      if (resizeExisting((item) => !!item.isPromo && promotionId(item) === promoId, quantity) || quantity === 0) return;
+      const promo = promotions.find((promotion) => String(promotion.id) === promoId);
+      if (promo) addCrossPromotionToCart(promo, quantity, false);
     });
-
-    if (itemsWereAdded) {
-      onClose(); // Just close this modal
-      // Do NOT open the cart, as it's already open behind this modal.
-      setQuantities(new Map());
-      setPromoQuantities(new Map());
-    }
+    onClose();
   };
-
-  const totalItems = Array.from(quantities.values()).reduce(
-    (sum, qty) => sum + qty,
-    0
-  );
-
-  const totalPromos = Array.from(promoQuantities.values()).reduce(
-    (sum, qty) => sum + qty,
-    0
-  );
-
-  const totalToAdd = totalItems + totalPromos;
 
   if (!isOpen) return null;
 
@@ -209,7 +193,7 @@ export function QuickAddModal({
                 <QuickAddRow
                   key={variant.id}
                   variant={variant}
-                  quantity={quantities.get(variant.id) || 0}
+                  quantity={quantities.get(String(variant.id)) || 0}
                   onQuantityChange={(newQty) =>
                     handleQuantityChange(variant.id, newQty)
                   }
@@ -242,7 +226,7 @@ export function QuickAddModal({
                     </div>
                     <div className="flex justify-end col-span-3">
                       <NumberStepper
-                        value={promoQuantities.get(promo.id) || 0}
+                        value={promoQuantities.get(String(promo.id)) || 0}
                         onCommit={(value) =>
                           handlePromoQuantityChange(
                             promo.id,
@@ -264,14 +248,9 @@ export function QuickAddModal({
         <div className="mt-auto p-4 border-t">
           <button
             onClick={handleAddToCart}
-            disabled={totalToAdd === 0}
             className="bg-brand hover:bg-brand-dark disabled:bg-gray-300 py-3 rounded-lg w-full font-bold text-white transition-colors"
           >
-            Añadir{" "}
-            {totalToAdd > 0
-              ? `${totalToAdd} ${totalToAdd === 1 ? "ítem" : "ítems"}`
-              : ""}{" "}
-            al Carrito
+            Confirmar cantidades
           </button>
         </div>
       </div>

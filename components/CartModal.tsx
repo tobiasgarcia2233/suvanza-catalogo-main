@@ -19,6 +19,7 @@ export function CartModal() {
   const { isCartOpen, closeCart } = useUIStore();
   // --- 1. Get the mode and clearCart action ---
   const { items, total, mode, clearCart } = useCartStore();
+  const displayedItems = [...items.filter((item) => item.isPromo), ...items.filter((item) => !item.isPromo)];
   const products = useProductsStore((s) => s.products);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
@@ -111,7 +112,7 @@ export function CartModal() {
             ) : (
               <>
                 <div className="flex-grow py-4 overflow-y-auto">
-                  {items.map((item) => (
+                  {displayedItems.map((item) => (
                     <CartItem key={item.cartLineKey ?? item.id} item={item} />
                   ))}
                   <button

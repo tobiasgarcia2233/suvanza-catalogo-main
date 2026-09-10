@@ -1,4 +1,5 @@
 import type { CartItem, CrossPromotion } from "@/types";
+import { expandComboRows } from "@/lib/comboRows";
 
 export interface ComboCandidate {
   promotion: CrossPromotion;
@@ -7,32 +8,24 @@ export interface ComboCandidate {
   remaining: CartItem[];
 }
 
-// A read-only view of the complete purchase, including explicitly added and
-// manually adjusted bundles. Do not invent variants for old/incomplete bundles.
+// Applied bundles stay allocated; only ordinary cart lines can fund additions.
 export function getAvailableCombos(items: CartItem[], promotions: CrossPromotion[]) {
-  const incomplete = items.some((item) => item.isPromo && (!item.includedItems?.length ||
+  const availableItems = items.filter((item) => !item.isPromo).map((item) => ({ ...item }));
+  return { availableItems, candidates: findComboCandidates(availableItems, promotions),
+    limitation: getComboRemovalLimitation(items) };
+}
+
+export function getComboRemovalLimitation(items: CartItem[]): string | null {
+  const incomplete = expandComboRows(items).some((item) => item.isPromo && (!item.includedItems?.length ||
     item.includedItems.some((included) => included.isPromo || !Number.isFinite(included.quantity) || included.quantity <= 0)));
-  if (incomplete) return {
-    availableItems: null, candidates: [],
-    limitation: "Falta el detalle de productos de un combo. No podemos reorganizarlo ni quitarlo sin perder cantidades.",
-  };
-  const expanded = items.flatMap((item) => item.isPromo
-    ? item.includedItems!.map((included) => ({ ...included, quantity: included.quantity * item.quantity }))
-    : [{ ...item }]);
-  // Match the existing regrouping rule: equivalent lines merge, while distinct
-  // manual product adjustments remain separate. No-combo removal uses priceCart.
-  const merged = new Map<string, CartItem>();
-  expanded.forEach((item) => {
-    const key = JSON.stringify([item.id, item.manualPercentage, item.manualPricePerUnit, item.manualTotal, item.priceTiers]);
-    const previous = merged.get(key);
-    if (previous) previous.quantity += item.quantity;
-    else merged.set(key, item);
-  });
-  const availableItems = [...merged.values()];
-  return { availableItems, candidates: findComboCandidates(availableItems, promotions), limitation: null };
+  return incomplete
+    ? "Falta el detalle de productos de un combo. No podemos reorganizarlo ni quitarlo sin perder cantidades."
+    : null;
 }
 
 export function preserveComboAdjustments(allocated: CartItem[], original: CartItem[]) {
+  allocated = expandComboRows(allocated);
+  original = expandComboRows(original);
   const adjusted = original.filter((item) => item.isPromo &&
     (item.manualPercentage > 0 || item.manualPricePerUnit != null || item.manualTotal != null));
   const contentsKey = (bundle: CartItem) => JSON.stringify(bundle.includedItems?.map((item) =>
@@ -249,6 +242,7 @@ export function isAutomaticBundle(item: CartItem): boolean {
 }
 
 export function expandAutomaticBundles(items: CartItem[], includeAdjusted = false): CartItem[] {
+  items = expandComboRows(items);
   // A bundle-level adjustment has no defined transfer rule. Preserve that
   // purchased bundle until its adjustment is cleared or combos are turned off.
   const expanded = items.flatMap((item) => isAutomaticBundle(item) &&
