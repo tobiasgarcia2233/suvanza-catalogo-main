@@ -51,7 +51,7 @@ const findProductForPromoItem = (
 ): { parentProduct: Product; variant: Variant } | null => {
   const lowerItemName = itemName.toLowerCase();
   for (const product of getProducts()) {
-    if (product.brand.toLowerCase() === lowerItemName) {
+    if (product.brand?.toLowerCase() === lowerItemName) {
       if (product.variants && product.variants.length > 0) {
         return { parentProduct: product, variant: product.variants[0] };
       }
