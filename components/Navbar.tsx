@@ -8,6 +8,7 @@ import NavLinks from "@/components/NavLinks";
 import SellerNavLinks from "@/components/SellerNavLinks";
 import MobileNav from "@/components/MobileNav";
 import AdminSignOut from "@/app/admin/AdminSignOut";
+import { useSessionStore } from "@/store/sessionStore";
 
 // Session-gated areas. The navbar only picks which links to show — access is
 // enforced by the middleware (proxy.ts) and each page, so this never needs to
@@ -23,7 +24,11 @@ function isAdminPath(pathname: string) {
 
 export default function Navbar() {
   const pathname = usePathname();
-  const admin = isAdminPath(pathname);
+  const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+  // Admin routes are self-evident from the path. "/" is the exception: it serves
+  // both the login screen and the logged-in landing, so fall back to the session
+  // flag that the page pushes into the store (see <SessionSync>).
+  const admin = isAdminPath(pathname) || (pathname === "/" && isAuthenticated);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-border bg-surface">
