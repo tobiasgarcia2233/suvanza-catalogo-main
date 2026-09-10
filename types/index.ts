@@ -40,6 +40,9 @@ export interface CartItem extends Product {
   promoId?: string;
   isPromo?: boolean;
   includedItems?: CartItem[];
+  // One visible promotion row can contain repetitions with different concrete
+  // variants or manual adjustments. Parts retain their per-repetition manifests.
+  comboParts?: CartItem[];
   manualPricePerUnit?: number | null;
   // Automatic regrouping is distinct from explicitly purchasing a bundle.
   comboSource?: "automatic" | "explicit";

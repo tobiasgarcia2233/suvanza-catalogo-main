@@ -1,4 +1,5 @@
 import type { CartItem } from "@/types";
+import { expandComboRows } from "@/lib/comboRows";
 
 interface PricedCart {
   items: CartItem[];
@@ -52,12 +53,13 @@ export function getCartPricingInsights(
   items: CartItem[], total: number, calculate: CalculateCart,
 ): CartPricingInsights {
   const result: CartPricingInsights = { suggestions: [] };
-  const bundles = items.filter((item) => item.isPromo);
+  const purchaseLines = expandComboRows(items);
+  const bundles = purchaseLines.filter((item) => item.isPromo);
   if (bundles.some((item) => !item.includedItems?.length ||
     item.includedItems.some((included) => included.isPromo || !Number.isFinite(included.quantity) || included.quantity <= 0))) {
     return { ...result, limitation: "No podemos comparar ni sugerir cantidades: falta el detalle de productos y variantes de un combo." };
   }
-  const purchasedProducts = items.flatMap((item) => item.isPromo ? item.includedItems! : [item]);
+  const purchasedProducts = purchaseLines.flatMap((item) => item.isPromo ? item.includedItems! : [item]);
   if (!Number.isFinite(total) || items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0) ||
     purchasedProducts.some((item) => !hasReliableProductPrice(item))) {
     return { ...result, limitation: "No podemos comparar ni sugerir cantidades: faltan precios por cantidad válidos para algún producto o variante." };

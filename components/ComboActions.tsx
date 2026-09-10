@@ -19,7 +19,7 @@ export function ComboActions() {
       <div className="flex flex-wrap gap-3">
         <button type="button" onClick={evaluateCombos} disabled={!hydrated || count === 0}
           className="min-h-12 flex-1 basis-64 rounded-lg bg-brand px-4 py-3 text-xl font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500">
-          {count === 1 ? "Aplicar combo disponible" : "Ver combos disponibles"}
+          {count === 1 && availability.candidates[0].repetitions === 1 ? "Aplicar combo disponible" : "Ver combos disponibles"}
         </button>
         {appliedCount > 0 && (
           <button type="button" onClick={removeCombos}

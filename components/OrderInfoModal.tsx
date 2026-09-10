@@ -9,6 +9,7 @@ import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getProducts } from "@/store/productsStore";
 import { CartItem } from "@/types"; // <-- ADD THIS IMPORT IF NOT PRESENT
+import { expandComboRows } from "@/lib/comboRows";
 
 interface OrderInfoModalProps {
   sellerName: string;
@@ -102,7 +103,7 @@ export function OrderInfoModal({
 
     // ====================== PAYLOAD BUILDER LOGIC START ======================
     // This logic "unrolls" promos into their constituent items for the backend.
-    const flattenedItems = items.reduce((acc: any[], item: CartItem) => {
+    const flattenedItems = expandComboRows(items).reduce((acc: any[], item: CartItem) => {
       // If it's a regular item, just format and add it.
       if (!item.isPromo || !item.includedItems) {
         acc.push({

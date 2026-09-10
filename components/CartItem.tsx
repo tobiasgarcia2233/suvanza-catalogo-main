@@ -69,6 +69,9 @@ export function CartItem({ item }: CartItemProps) {
               {item.brand}
             </p>
             <h3 className="font-semibold whitespace-nowrap">{item.name}</h3>
+            {item.comboParts && <p className="mt-1 text-sm text-text-secondary">
+              Contenido total de las {item.quantity} repeticiones. Se conservan sus variantes y ajustes.
+            </p>}
             {item.comboSource === "automatic" && (item.manualPercentage > 0 || item.manualPricePerUnit != null) && (
               <p className="mt-2 text-lg leading-relaxed text-text-secondary">
                 Este combo se conserva mientras tenga un ajuste manual.

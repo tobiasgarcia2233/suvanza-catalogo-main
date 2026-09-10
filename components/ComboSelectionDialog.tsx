@@ -59,7 +59,6 @@ export function ComboSelectionDialog() {
   };
 
   const leftovers = selection?.previewItems.filter((item) => !item.isPromo) ?? [];
-  const selectedCount = selection?.options.reduce((sum, option) => sum + option.selectedQuantity, 0) ?? 0;
 
   return (
     <dialog
@@ -85,11 +84,11 @@ export function ComboSelectionDialog() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
             <p id="combo-selection-description" className="mb-4 text-xl leading-relaxed">
-              Usá + y − para elegir cuántos aplicar. Solo se usan productos de tu carrito.
+              Usá + y − para cambiar las cantidades del carrito. Para sumar combos, solo se usan productos sueltos.
             </p>
             <div className="grid gap-3" aria-label="Combos disponibles">
               {selection.options.map((option, index) => {
-                const unavailable = option.maxQuantity === 0;
+                const unavailable = option.maxQuantity === option.minQuantity && option.selectedQuantity === option.minQuantity;
                 const atMaximum = option.selectedQuantity >= option.maxQuantity;
                 return (
                   <section
@@ -109,7 +108,7 @@ export function ComboSelectionDialog() {
                       <div className="flex items-center gap-3" role="group" aria-label={`Cantidad de ${option.promotion.title}`}>
                         <button
                           type="button"
-                          disabled={option.selectedQuantity === 0}
+                          disabled={option.selectedQuantity <= option.minQuantity}
                           onClick={() => changeQuantity(option.id, option.selectedQuantity - 1, selection.revision)}
                           aria-label={`Quitar una repetición de ${option.promotion.title}`}
                           className="h-12 w-12 rounded-lg border-2 border-brand bg-surface text-3xl font-bold text-brand disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
@@ -144,16 +143,8 @@ export function ComboSelectionDialog() {
               <p className="text-2xl font-bold">Total con esta selección: {money(selection.total)}</p>
               {insights.comparison ? <>
                 <p className="text-lg">Sin combos: {money(insights.comparison.withoutCombos)}</p>
-                {(insights.comparison.difference !== 0 || insights.suggestions.length > 0) && (
-                  <div className={`space-y-1 text-lg font-semibold ${insights.comparison.difference > 0 ? "text-amber-800" : "text-text-secondary"}`}>
-                    {insights.comparison.difference !== 0 && <p>
-                      {money(Math.abs(insights.comparison.difference))} {insights.comparison.difference > 0 ? "más" : "menos"} que sin combos.
-                      {insights.comparison.difference > 0 && insights.comparison.lostVolumeBrands.length > 0 && " Se pierde precio por volumen en los productos restantes."}
-                    </p>}
-                    <NearbyVolumeSuggestions insights={insights} items={selection.previewItems} compact />
-                  </div>
-                )}
               </> : <p className="text-lg">{insights.limitation}</p>}
+              <NearbyVolumeSuggestions insights={insights} />
             </div>
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={cancel} className="min-h-12 flex-1 rounded-xl border-2 border-brand px-4 py-3 text-xl font-bold text-brand transition-colors hover:bg-brand/5">
@@ -161,7 +152,7 @@ export function ComboSelectionDialog() {
               </button>
               <button
                 type="button"
-                disabled={selectedCount === 0 || !!selection.applyLimitation}
+                disabled={!selection.hasChanges || !!selection.applyLimitation}
                 onClick={() => apply(selection.revision)}
                 className="min-h-12 flex-1 rounded-xl bg-brand px-4 py-3 text-xl font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
               >
@@ -169,9 +160,9 @@ export function ComboSelectionDialog() {
               </button>
             </div>
             <p className="mt-2 text-lg leading-relaxed">
-              {selectedCount === 0 ? "Elegí al menos una repetición para aplicar."
+              {!selection.hasChanges ? "Modificá una cantidad para aplicar los cambios."
                 : selection.applyLimitation ? "Revisá el ajuste manual indicado para aplicar esta selección."
-                : `Se aplican solo las ${selectedCount} repeticiones elegidas.`}
+                : "Se guardan las cantidades elegidas en el carrito."}
             </p>
           </div>
         </div>
