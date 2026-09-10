@@ -11,6 +11,7 @@ import {
   Variant,
   Order,
 } from "@/types";
+import { resolvePromotionProduct } from "@/lib/promotionProducts";
 import { getProducts, getPromotions, useProductsStore } from "@/store/productsStore";
 import {
   getAvailableCombos, getComboRemovalLimitation,
@@ -53,31 +54,10 @@ export interface DiscountDetail {
   amount: number;
 }
 
-const findProductForPromoItem = (
-  itemName: string
-): { parentProduct: Product; variant: Variant } | null => {
-  const lowerItemName = itemName.toLowerCase();
-  for (const product of getProducts()) {
-    if (product.brand?.toLowerCase() === lowerItemName) {
-      if (product.variants && product.variants.length > 0) {
-        return { parentProduct: product, variant: product.variants[0] };
-      }
-    }
-    if (product.variants) {
-      for (const variant of product.variants) {
-        if (
-          product.name.toLowerCase() === lowerItemName ||
-          variant.name.toLowerCase() === lowerItemName
-        ) {
-          return { parentProduct: product, variant: variant };
-        }
-      }
-    }
-  }
-  console.warn(
-    `[CartStore] Could not find a matching product for promo item: "${itemName}"`
-  );
-  return null;
+const findProductForPromoItem = (itemName: string) => {
+  const resolved = resolvePromotionProduct(getProducts(), itemName);
+  if (!resolved) console.warn(`[CartStore] Could not find a matching product for promo item: "${itemName}"`);
+  return resolved;
 };
 
 // MODIFICATION: The interface is now corrected to match the implementation.

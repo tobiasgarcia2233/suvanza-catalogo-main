@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Pagination } from "swiper/modules";
@@ -10,7 +10,8 @@ import { useUIStore } from "@/store/uiStore";
 import { useCartStore } from "@/store/cartStore";
 import { useProductsStore } from "@/store/productsStore";
 import { gsap } from "gsap";
-import { Camera, Gift, Tag, X } from "lucide-react";
+import { Camera, ChevronDown, Gift, Tag, X } from "lucide-react";
+import { PromotionBreakdown } from "./PromotionBreakdown";
 import { VariantRow } from "./VariantRow";
 import { NumberStepper } from "./ui/NumberStepper";
 
@@ -27,6 +28,8 @@ function unitPriceForQty(
 }
 
 export function ProductDetailModal() {
+  const breakdownId = useId();
+  const [expandedPromotions, setExpandedPromotions] = useState<Set<string>>(new Set());
   const panelRef = useRef<HTMLDivElement>(null);
   const {
     isDetailModalOpen,
@@ -36,6 +39,7 @@ export function ProductDetailModal() {
   } = useUIStore();
   const { addMultipleToCart, addCrossPromotionToCart } = useCartStore();
   const products = useProductsStore((s) => s.products);
+  useEffect(() => { setExpandedPromotions(new Set()); }, [isDetailModalOpen, selectedProduct]);
 
   const [variantQuantities, setVariantQuantities] = useState<
     Map<string, string>
@@ -344,11 +348,8 @@ export function ProductDetailModal() {
                   </header>
                   <div className="divide-y divide-brand/15">
                     {crossPromotions.map((promo) => {
-                      const listPrice = promo.items.reduce(
-                        (s, it) => s + it.pricePerUnit * it.quantity,
-                        0,
-                      );
-                      const saving = listPrice - promo.totalPrice;
+                      const expanded = expandedPromotions.has(promo.id);
+                      const detailsId = `${breakdownId}-${promo.id}`;
                       const qty = comboQuantities.get(promo.id) ?? 0;
                       return (
                         <div
@@ -357,21 +358,21 @@ export function ProductDetailModal() {
                             qty > 0 ? "bg-brand/10" : ""
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-base font-bold text-text-primary">
+                          <button type="button" aria-expanded={expanded} aria-controls={detailsId}
+                            onClick={() => setExpandedPromotions((previous) => {
+                              const next = new Set(previous);
+                              if (next.has(promo.id)) next.delete(promo.id); else next.add(promo.id);
+                              return next;
+                            })}
+                            className="flex w-full items-start justify-between gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-brand">
+                            <span className="flex items-center gap-2 text-base font-bold text-text-primary">
                               {promo.title}
-                            </p>
-                            <div className="shrink-0 text-right">
-                              <p className="text-lg font-bold text-brand">
-                                {fmt(promo.totalPrice)}
-                              </p>
-                              {saving > 0 && (
-                                <p className="text-xs font-semibold text-success">
-                                  Ahorrás {fmt(saving)}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                              <ChevronDown size={18} aria-hidden="true" className={`shrink-0 ${expanded ? "rotate-180" : ""}`} />
+                            </span>
+                            <span className="shrink-0 text-right text-lg font-bold text-brand">
+                              {fmt(promo.totalPrice)}
+                            </span>
+                          </button>
                           <ul className="mt-2 flex flex-wrap gap-2">
                             {promo.items.map((item, index) => {
                               const img = thumbFor(item.name);
@@ -400,6 +401,9 @@ export function ProductDetailModal() {
                               );
                             })}
                           </ul>
+                          <div id={detailsId} hidden={!expanded} className="mt-3">
+                            {expanded && <PromotionBreakdown promotion={promo} />}
+                          </div>
                           <div className="mt-3 flex items-center justify-between gap-3">
                             <span className="min-w-0 text-xs text-text-secondary">
                               {qty > 0
