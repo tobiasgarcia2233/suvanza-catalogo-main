@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getProduct } from "@/lib/productQueries";
 import { deleteProduct, updateProduct } from "@/lib/productMutations";
 import { readSessionFromCookie } from "@/lib/auth";
+import { revalidateCatalog } from "@/lib/revalidateCatalog";
 
 export async function GET(
   _req: NextRequest,
@@ -24,6 +25,7 @@ export async function PATCH(
     const { id } = await context.params;
     const body = await request.json();
     await updateProduct(id, body);
+    revalidateCatalog();
     return NextResponse.json({ message: "updated" });
   } catch (err) {
     return NextResponse.json(
@@ -43,6 +45,7 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     await deleteProduct(id);
+    revalidateCatalog();
     return NextResponse.json({ message: "deleted" });
   } catch (err) {
     return NextResponse.json(

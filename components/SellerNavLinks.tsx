@@ -5,7 +5,13 @@ import { usePathname } from "next/navigation";
 import { sellerSlugFromPath } from "@/lib/sellerRoutes";
 import { useUIStore } from "@/store/uiStore";
 
-export default function SellerNavLinks() {
+export default function SellerNavLinks({
+  orientation = "horizontal",
+  onNavigate,
+}: {
+  orientation?: "horizontal" | "vertical";
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const { isSellerOrdersOpen, openSellerOrders, closeSellerOrders } =
     useUIStore();
@@ -13,19 +19,30 @@ export default function SellerNavLinks() {
   const sellerSlug = sellerSlugFromPath(pathname);
   if (!sellerSlug) return null;
 
+  const vertical = orientation === "vertical";
+
   const itemClass = (active: boolean) =>
     `rounded-button px-3 py-1.5 text-sm transition-colors ${
+      vertical ? "block w-full text-left" : ""
+    } ${
       active
         ? "bg-brand text-white"
         : "text-text-secondary hover:bg-background hover:text-text-primary"
     }`;
 
   return (
-    <ul className="flex items-center gap-1">
+    <ul
+      className={
+        vertical ? "flex flex-col gap-1" : "flex items-center gap-1"
+      }
+    >
       <li>
         <Link
           href={`/${sellerSlug}`}
-          onClick={closeSellerOrders}
+          onClick={() => {
+            closeSellerOrders();
+            onNavigate?.();
+          }}
           className={itemClass(!isSellerOrdersOpen)}
         >
           Catálogo
@@ -34,7 +51,10 @@ export default function SellerNavLinks() {
       <li>
         <button
           type="button"
-          onClick={openSellerOrders}
+          onClick={() => {
+            openSellerOrders();
+            onNavigate?.();
+          }}
           className={itemClass(isSellerOrdersOpen)}
         >
           Mis ventas

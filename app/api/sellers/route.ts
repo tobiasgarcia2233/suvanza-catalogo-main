@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSessionFromCookie } from "@/lib/auth";
 import { createSeller, getAllSellers } from "@/lib/sellerQueries";
+import { revalidateSellers } from "@/lib/revalidateCatalog";
 
 export async function GET() {
   const session = await readSessionFromCookie();
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
     }
 
     const seller = await createSeller(name);
+    revalidateSellers();
     return NextResponse.json({ seller }, { status: 201 });
   } catch (error) {
     console.error("POST /api/sellers error:", error);

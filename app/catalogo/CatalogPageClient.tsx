@@ -6,6 +6,7 @@ import { CatalogView } from "@/components/CatalogView";
 import { ViewModeSwitch, ViewMode } from "@/components/ViewModeSwitch";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { CategoryFilterBar } from "@/components/CategoryFilterBar";
+import { CartFab } from "@/components/CartFab";
 import ProductsHydrator from "@/components/ProductsHydrator";
 import type { Product, CrossPromotion, Category } from "@/types";
 
@@ -60,6 +61,7 @@ export default function CatalogPageClient({
       </div>
 
       <ProductDetailModal />
+      <CartFab variant="dark" />
     </div>
   );
 }

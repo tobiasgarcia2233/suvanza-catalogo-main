@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAllCategories } from "@/lib/categoryQueries";
+import { getCachedCategories } from "@/lib/catalogCache";
 
 export async function GET() {
-  const categories = await getAllCategories();
+  const categories = await getCachedCategories();
   return NextResponse.json({ categories });
 }

@@ -7,6 +7,7 @@ import {
   Users,
 } from "lucide-react";
 import LoginForm from "@/components/LoginForm";
+import SessionSync from "@/components/SessionSync";
 import { readSessionFromCookie } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function Home({
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-background text-text-primary">
+      <SessionSync isAuthenticated={!!session} />
       <div className="mx-auto grid max-w-5xl gap-16 px-6 py-16 sm:py-24 lg:grid-cols-[1fr_20rem]">
         <section className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wide text-brand">

@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
 import {
   Check,
   CheckCircle,
+  ChevronDown,
   CreditCard,
+  Gift,
   Loader2,
   MoreVertical,
+  Package,
   Pencil,
   Printer,
   StickyNote,
@@ -35,6 +38,7 @@ export function OrderRow({ order }: OrderRowProps) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { loadOrderForEdit } = useCartStore();
   const { openConfirmationModal, openCart } = useUIStore();
@@ -140,6 +144,36 @@ export function OrderRow({ order }: OrderRowProps) {
 
   const spinner = <Loader2 size={18} className="animate-spin" />;
 
+  const combos = order.promos_sold ?? [];
+  const comboCount = combos.reduce((sum, c) => sum + (c.quantity || 0), 0);
+  const itemCount = order.items.reduce((sum, it) => sum + (it.quantity || 0), 0);
+
+  // The same variant can land in `order.items` more than once — bought loose and
+  // again unrolled from a combo, or shared between two combos. For this picking
+  // view (quantities only, no prices) we collapse those into one line per
+  // product so the list reads cleanly and keys stay unique.
+  const displayItems = useMemo(() => {
+    const byId = new Map<
+      string,
+      { id: string; brand: string; name: string; quantity: number }
+    >();
+    for (const it of order.items) {
+      const key = it.id || it.name;
+      const existing = byId.get(key);
+      if (existing) {
+        existing.quantity += it.quantity || 0;
+      } else {
+        byId.set(key, {
+          id: it.id,
+          brand: it.brand,
+          name: it.name,
+          quantity: it.quantity || 0,
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }, [order.items]);
+
   return (
     <>
       {showUpdateSuccess && (
@@ -149,10 +183,25 @@ export function OrderRow({ order }: OrderRowProps) {
       )}
 
       <div
-        className={`grid grid-cols-7 items-center gap-4 rounded-lg border p-4 transition-all
+        className={`rounded-lg border transition-all
           ${isCompleted ? "bg-gray-100" : "bg-surface hover:shadow-md"}
           ${anyBusy ? "opacity-70" : ""}`}
       >
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={() => setItemsOpen((open) => !open)}
+          className="flex w-11 shrink-0 items-center justify-center self-stretch rounded-l-lg text-text-secondary transition-colors hover:bg-background hover:text-text-primary"
+          aria-label={itemsOpen ? "Ocultar productos del pedido" : "Ver productos del pedido"}
+          aria-expanded={itemsOpen}
+        >
+          <ChevronDown
+            size={18}
+            className={`transition-transform ${itemsOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        <div className="grid flex-1 grid-cols-7 items-center gap-4 p-4">
         <div className="col-span-2">
           <p className="font-bold text-text-primary">
             {order.buyer_details.name}
@@ -308,6 +357,62 @@ export function OrderRow({ order }: OrderRowProps) {
             )}
           </div>
         </div>
+        </div>
+      </div>
+
+      {itemsOpen && (
+        <div className="border-t border-border bg-background/40 px-4 py-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Package size={15} className="shrink-0 text-text-secondary" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              Productos a preparar
+            </p>
+            <span className="text-xs text-text-secondary">
+              · {itemCount} {itemCount === 1 ? "unidad" : "unidades"}
+            </span>
+          </div>
+
+          {displayItems.length === 0 ? (
+            <p className="text-sm text-text-secondary">Sin productos.</p>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
+              {displayItems.map((item, i) => (
+                <li
+                  key={item.id || `${item.name}-${i}`}
+                  className="flex items-center gap-3 px-3 py-2"
+                >
+                  <span className="inline-flex h-7 min-w-[2.5rem] shrink-0 items-center justify-center rounded-md bg-brand/10 px-1.5 text-sm font-bold text-brand">
+                    {item.quantity}×
+                  </span>
+                  <span className="text-sm leading-tight">
+                    {item.brand && (
+                      <span className="text-text-secondary">{item.brand} · </span>
+                    )}
+                    <span className="font-medium text-text-primary">
+                      {item.name}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {combos.length > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-dashed border-border bg-surface px-3 py-2">
+              <Gift size={15} className="mt-0.5 shrink-0 text-text-secondary" />
+              <p className="text-xs leading-relaxed text-text-secondary">
+                <span className="font-semibold text-text-primary">
+                  {comboCount} {comboCount === 1 ? "combo" : "combos"}
+                </span>{" "}
+                en este pedido:{" "}
+                {combos.map((c) => `${c.title} ×${c.quantity}`).join(" · ")}.
+                <br />
+                Sus productos ya están incluidos en la lista de arriba.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
       </div>
 
       <NotesModal

@@ -107,6 +107,36 @@ export async function fetchRecentOrders(
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
 }
 
+/**
+ * Cheap "did anything change?" signal for the orders dashboard to poll instead
+ * of re-running the whole page every few seconds. One indexed scan, tiny
+ * payload. Catches new orders (count / latest) and paid/unpaid transitions
+ * (paid). It does not catch note/payment edits made from another device — those
+ * are rare and the operator making them already refreshes locally.
+ */
+export async function getOrdersPulse(): Promise<{
+  count: number;
+  latest: string | null;
+  paid: number;
+}> {
+  const res = await db.execute(
+    `SELECT COUNT(*) AS count,
+            MAX(created_at) AS latest,
+            COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS paid
+     FROM orders`,
+  );
+  const row = res.rows[0] as unknown as {
+    count: number | bigint;
+    latest: string | null;
+    paid: number | bigint;
+  };
+  return {
+    count: Number(row.count),
+    latest: row.latest ?? null,
+    paid: Number(row.paid),
+  };
+}
+
 export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
   // Unlike the admin dashboards, this keeps every order for the seller —
   // completed sales stay visible permanently instead of disappearing once
