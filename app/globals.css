@@ -133,3 +133,13 @@
 .swiper-slide {
   display: flex !important;
 }
+
+/* Horizontal chip rows scroll on narrow phones without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
