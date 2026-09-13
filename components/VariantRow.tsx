@@ -2,6 +2,7 @@
 "use client";
 
 import Image from "next/image";
+import { getBaseUnitPrice } from "@/lib/catalogBasePrice";
 import { Variant } from "@/types";
 import { Camera } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
@@ -33,7 +34,7 @@ export function VariantRow({
   const { openGalleryModal } = useUIStore();
 
   const qty = Math.max(0, parseInt(quantity, 10) || 0);
-  const basePrice = variant.priceTiers?.[0]?.pricePerUnit ?? 0;
+  const basePrice = getBaseUnitPrice(variant) ?? 0;
   const unitPrice = unitPriceForQty(variant, qty);
   const lineTotal = unitPrice * qty;
   const hasVolumeBreak = qty > 0 && unitPrice < basePrice;

@@ -12,6 +12,7 @@ import { useProductsStore } from "@/store/productsStore";
 import { gsap } from "gsap";
 import { Camera, ChevronDown, Gift, Tag, X } from "lucide-react";
 import { PromotionBreakdown } from "./PromotionBreakdown";
+import { getCatalogStartingPrice } from "@/lib/catalogBasePrice";
 import { VariantRow } from "./VariantRow";
 import { NumberStepper } from "./ui/NumberStepper";
 
@@ -70,17 +71,10 @@ export function ProductDetailModal() {
     return variants.flatMap((v) => v.imageUrls ?? []);
   }, [selectedProduct, variants]);
 
-  const priceRange = useMemo(() => {
-    if (!selectedProduct) return { min: 0, max: 0 };
-    const prices = (
-      variants.length > 0
-        ? variants.flatMap((v) => v.priceTiers?.map((t) => t.pricePerUnit) ?? [])
-        : selectedProduct.priceTiers.map((t) => t.pricePerUnit)
-    ).filter((n) => n > 0);
-    return prices.length
-      ? { min: Math.min(...prices), max: Math.max(...prices) }
-      : { min: 0, max: 0 };
-  }, [selectedProduct, variants]);
+  const startingPrice = useMemo(
+    () => selectedProduct ? getCatalogStartingPrice(selectedProduct) : 0,
+    [selectedProduct],
+  );
 
   const selection = useMemo(() => {
     let units = 0;
@@ -263,13 +257,11 @@ export function ProductDetailModal() {
             <h2 className="text-3xl font-bold leading-tight text-text-primary sm:text-4xl">
               {selectedProduct.name}
             </h2>
-            {priceRange.min > 0 && (
+            {startingPrice > 0 && (
               <p className="mt-3 flex items-baseline gap-2">
-                {priceRange.min !== priceRange.max && (
-                  <span className="text-base text-text-secondary">Desde</span>
-                )}
+                <span className="text-base text-text-secondary">Desde</span>
                 <span className="text-2xl font-bold text-brand sm:text-3xl">
-                  {fmt(priceRange.min)}
+                  {fmt(startingPrice)}
                 </span>
                 <span className="text-base text-text-secondary">/ unidad</span>
               </p>

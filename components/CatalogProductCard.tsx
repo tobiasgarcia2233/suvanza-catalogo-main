@@ -1,5 +1,6 @@
 "use client";
 
+import { getBaseUnitPrice, getCatalogStartingPrice } from "@/lib/catalogBasePrice";
 import { Product } from "@/types";
 import Image from "next/image";
 import { ImageOff } from "lucide-react";
@@ -25,18 +26,6 @@ export function CatalogProductCard({ product }: CatalogProductCardProps) {
 
   const variants = product.variants ?? [];
   const hasMultipleVariants = variants.length > 1;
-
-  const getLowestPrice = () => {
-    if (variants.length > 0) {
-      return Math.min(
-        ...variants.flatMap((v) => v.priceTiers || []).map((t) => t.pricePerUnit)
-      );
-    }
-    if (product.priceTiers.length > 0) {
-      return product.priceTiers[0].pricePerUnit;
-    }
-    return 0;
-  };
 
   return (
     <div
@@ -65,7 +54,11 @@ export function CatalogProductCard({ product }: CatalogProductCardProps) {
           {product.name}
         </p>
 
-        {hasMultipleVariants ? (
+        <p className="font-extrabold text-brand text-lg">
+          Desde ${getCatalogStartingPrice(product).toLocaleString("es-CL")}
+        </p>
+
+        {hasMultipleVariants && (
           <div className="flex flex-wrap gap-2">
             {variants.map((variant) => (
               <span
@@ -75,17 +68,13 @@ export function CatalogProductCard({ product }: CatalogProductCardProps) {
                 {variant.name}{" "}
                 <span className="font-bold text-brand">
                   $
-                  {(variant.priceTiers?.[0]?.pricePerUnit || 0).toLocaleString(
+                  {(getBaseUnitPrice(variant) ?? 0).toLocaleString(
                     "es-CL"
                   )}
                 </span>
               </span>
             ))}
           </div>
-        ) : (
-          <p className="font-extrabold text-brand text-lg">
-            Desde ${getLowestPrice().toLocaleString("es-CL")}
-          </p>
         )}
       </div>
     </div>

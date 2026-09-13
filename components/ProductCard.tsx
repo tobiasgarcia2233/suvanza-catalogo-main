@@ -1,6 +1,7 @@
 // src/components/ProductCard.tsx
 "use client";
 
+import { getCatalogStartingPrice } from "@/lib/catalogBasePrice";
 import { Product } from "@/types";
 import Image from "next/image";
 import { useUIStore } from "@/store/uiStore";
@@ -12,24 +13,7 @@ interface ProductCardProps {
 export function ProductCard({ product }: ProductCardProps) {
   const { openProductDetail } = useUIStore();
 
-  // NEW LOGIC: Find the lowest price among all variants or tiers
-  const getLowestPrice = () => {
-    if (product.variants && product.variants.length > 0) {
-      // Find the minimum price across all variants' price tiers
-      return Math.min(
-        ...product.variants
-          .flatMap((v) => v.priceTiers || [])
-          .map((t) => t.pricePerUnit)
-      );
-    }
-    // For products with shared pricing or simple products
-    if (product.priceTiers.length > 0) {
-      return product.priceTiers[0].pricePerUnit;
-    }
-    return 0;
-  };
-
-  const priceToDisplay = getLowestPrice();
+  const priceToDisplay = getCatalogStartingPrice(product);
 
   return (
     <div
