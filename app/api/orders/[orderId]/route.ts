@@ -3,6 +3,7 @@ import { deleteOrder, updateOrder, getOrder } from "@/lib/orderQueries";
 import { getSellerBySlug } from "@/lib/sellerQueries";
 import { readSessionFromCookie } from "@/lib/auth";
 import { isOrderLocked } from "@/types";
+import { assertSellerEventOrder, EventOrderError } from "@/lib/eventQueries";
 
 interface CartLine {
   id: string | number;
@@ -41,6 +42,8 @@ export async function PATCH(
     // whitelisted and the order actually belongs to that seller and hasn't
     // already been processed by an admin (mirrors the DELETE handler below).
     let isSellerEdit = false;
+    // Set when a seller edits an order of an event: lines are checked against it.
+    let sellerEvent: { eventId: string; sellerId: string } | null = null;
     if (sellerSlug) {
       const seller = await getSellerBySlug(sellerSlug);
       if (!seller) {
@@ -57,6 +60,9 @@ export async function PATCH(
         );
       }
       isSellerEdit = true;
+      if (existing.event_id) {
+        sellerEvent = { eventId: existing.event_id, sellerId: seller.id };
+      }
     } else {
       const session = await readSessionFromCookie();
       if (!session) {
@@ -65,6 +71,19 @@ export async function PATCH(
     }
 
     const body = await request.json();
+
+    if (sellerEvent) {
+      // A closed event blocks any change; new lines must belong to the event.
+      await assertSellerEventOrder({
+        ...sellerEvent,
+        itemIds: Array.isArray(body.items)
+          ? body.items.map((it: CartLine) => String(it.id))
+          : [],
+        promotionIds: Array.isArray(body.promos)
+          ? body.promos.map((p: { id: string }) => String(p.id))
+          : [],
+      });
+    }
 
     // Two shapes are accepted:
     // 1) Full edit from cart: { items, total, subtotal, buyerName, buyerDni, buyerPhone, autoApplyPromos? }
@@ -137,6 +156,9 @@ export async function PATCH(
     await updateOrder(orderId, patch);
     return NextResponse.json({ message: "Order updated" });
   } catch (error) {
+    if (error instanceof EventOrderError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
     console.error("PATCH /api/orders/[orderId] error:", error);
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed" },
@@ -171,6 +193,9 @@ export async function DELETE(
           { status: 403 },
         );
       }
+      if (order.event_id) {
+        await assertSellerEventOrder({ eventId: order.event_id, sellerId: seller.id });
+      }
     } else {
       const session = await readSessionFromCookie();
       if (!session) {
@@ -181,6 +206,9 @@ export async function DELETE(
     await deleteOrder(orderId);
     return NextResponse.json({ message: "Deleted" });
   } catch (error) {
+    if (error instanceof EventOrderError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
     console.error("DELETE /api/orders/[orderId] error:", error);
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed" },

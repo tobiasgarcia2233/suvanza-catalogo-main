@@ -13,11 +13,14 @@ import { expandComboRows } from "@/lib/comboRows";
 
 interface OrderInfoModalProps {
   sellerName: string;
+  /** Event a new order belongs to; null = "Individual". Edits keep theirs. */
+  eventId?: string | null;
   onOrderSuccess: () => void;
 }
 
 export function OrderInfoModal({
   sellerName,
+  eventId = null,
   onOrderSuccess,
 }: OrderInfoModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -176,6 +179,7 @@ export function OrderInfoModal({
 
     const orderData = {
       sellerName,
+      eventId,
       buyerName,
       buyerDni,
       buyerPhone,

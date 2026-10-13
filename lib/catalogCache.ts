@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { getAllProducts, getAllPromotions } from "./productQueries";
 import { getAllCategories } from "./categoryQueries";
 import { getSellerBySlug } from "./sellerQueries";
+import { getEventBySlug, getEventsForSeller } from "./eventQueries";
 
 /**
  * Cache tags for on-demand revalidation.
@@ -44,5 +45,21 @@ export function getCachedSellerBySlug(slug: string) {
     () => getSellerBySlug(slug),
     ["catalog:seller-by-slug", slug],
     { tags: [SELLERS_TAG], revalidate: CACHE_TTL_SECONDS },
+  )();
+}
+
+export function getCachedEventBySlug(slug: string) {
+  return unstable_cache(
+    () => getEventBySlug(slug),
+    ["events:by-slug", slug],
+    { tags: [EVENTS_TAG], revalidate: CACHE_TTL_SECONDS },
+  )();
+}
+
+export function getCachedSellerEvents(sellerId: string) {
+  return unstable_cache(
+    () => getEventsForSeller(sellerId),
+    ["events:by-seller", sellerId],
+    { tags: [EVENTS_TAG], revalidate: CACHE_TTL_SECONDS },
   )();
 }

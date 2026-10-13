@@ -144,15 +144,27 @@ export async function getOrdersPulse(): Promise<{
   };
 }
 
-export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
+export async function fetchOrdersBySeller(
+  sellerName: string,
+  /** undefined = every order, null = "Individual" only, string = that event. */
+  eventId?: string | null,
+): Promise<Order[]> {
   // Unlike the admin dashboards, this keeps every order for the seller —
   // completed sales stay visible permanently instead of disappearing once
   // they're paid or sent to Odoo.
+  const conditions = ["LOWER(seller_name) = LOWER(?)"];
+  const args: string[] = [sellerName];
+  if (eventId === null) {
+    conditions.push("event_id IS NULL");
+  } else if (eventId !== undefined) {
+    conditions.push("event_id = ?");
+    args.push(eventId);
+  }
   const res = await db.execute({
     sql: `SELECT * FROM orders
-          WHERE LOWER(seller_name) = LOWER(?)
+          WHERE ${conditions.join(" AND ")}
           ORDER BY created_at DESC`,
-    args: [sellerName],
+    args,
   });
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
 }
