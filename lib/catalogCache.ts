@@ -11,11 +11,13 @@ import { getSellerBySlug } from "./sellerQueries";
  * sales day, so instead of hitting Turso on every visit we serve a cached copy
  * and bust it explicitly when the admin edits something — see
  * `revalidateCatalog()` / `revalidateSellers()`, called from the mutation API
- * routes. `revalidate: 3600` is only a self-healing safety net for the case
- * where a bust is missed (a migration, a manual DB edit).
+ * routes (`revalidateEvents()` for events). `revalidate: 3600` is only a
+ * self-healing safety net for the case where a bust is missed (a migration, a
+ * manual DB edit).
  */
 export const CATALOG_TAG = "catalog";
 export const SELLERS_TAG = "sellers";
+export const EVENTS_TAG = "events";
 
 const CACHE_TTL_SECONDS = 3600;
 

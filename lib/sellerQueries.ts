@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "./db";
+import { slugify } from "./slug";
 
 export interface Seller {
   id: string;
@@ -8,7 +9,16 @@ export interface Seller {
   created_at: string;
 }
 
-type SellerRow = Seller;
+// libSQL rows are Row instances, not plain objects: React refuses to pass them
+// from a Server Component to a Client Component. Copy the fields out.
+function rowToSeller(r: Record<string, unknown>): Seller {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    slug: String(r.slug),
+    created_at: String(r.created_at),
+  };
+}
 
 const CODE_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -20,19 +30,9 @@ function randomCode(length = 4): string {
   return out;
 }
 
-function baseSlug(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 export async function getAllSellers(): Promise<Seller[]> {
   const res = await db.execute("SELECT * FROM sellers ORDER BY created_at DESC");
-  return res.rows as unknown as SellerRow[];
+  return res.rows.map(rowToSeller);
 }
 
 export async function getSellerBySlug(slug: string): Promise<Seller | null> {
@@ -41,7 +41,7 @@ export async function getSellerBySlug(slug: string): Promise<Seller | null> {
     args: [slug],
   });
   if (res.rows.length === 0) return null;
-  return res.rows[0] as unknown as SellerRow;
+  return rowToSeller(res.rows[0]);
 }
 
 export async function getSellerByName(name: string): Promise<Seller | null> {
@@ -50,14 +50,14 @@ export async function getSellerByName(name: string): Promise<Seller | null> {
     args: [name],
   });
   if (res.rows.length === 0) return null;
-  return res.rows[0] as unknown as SellerRow;
+  return rowToSeller(res.rows[0]);
 }
 
 export async function createSeller(name: string): Promise<Seller> {
   const trimmed = name.trim();
   if (!trimmed) throw new Error("El nombre no puede estar vacío.");
 
-  const base = baseSlug(trimmed);
+  const base = slugify(trimmed);
   if (!base) throw new Error("El nombre no puede estar vacío.");
 
   let slug = `${base}-${randomCode()}`;

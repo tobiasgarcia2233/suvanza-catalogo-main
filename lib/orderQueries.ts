@@ -5,7 +5,7 @@ import { ODOO_QUEUE_STATUSES, type Order, type OrderPayment } from "@/types";
 const isNumeric = (s: string) => /^\d+$/.test(s);
 
 // SQL twin of isClosedSale() in @/types — keep both in sync.
-const CLOSED_SALE_SQL = "'COMPLETED', 'ODOO_SENT', 'ODOO_ERROR'";
+export const CLOSED_SALE_SQL = "'COMPLETED', 'ODOO_SENT', 'ODOO_ERROR'";
 
 type OrderRow = {
   id: string;
