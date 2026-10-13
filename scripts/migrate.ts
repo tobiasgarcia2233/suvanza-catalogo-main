@@ -60,6 +60,11 @@ async function applySchema() {
     ["orders", "payment_method", "TEXT"],
     ["orders", "payments", "TEXT"],
     ["orders", "promos_sold", "TEXT"],
+    // Events + Odoo statuses (Oct 2026)
+    ["orders", "event_id", "TEXT REFERENCES events(id)"],
+    ["orders", "odoo_ref", "TEXT"],
+    ["orders", "odoo_error", "TEXT"],
+    ["orders", "odoo_sent_at", "TEXT"],
   ];
   for (const [table, col, type] of added) {
     try {
@@ -69,11 +74,50 @@ async function applySchema() {
       /* column already present — ignore */
     }
   }
+
+  // Indexes on columns added above can't live in schema.sql: on an existing
+  // database the schema runs before the ALTERs.
+  await db.execute(
+    "CREATE INDEX IF NOT EXISTS idx_orders_event ON orders(event_id, seller_name)",
+  );
+
+  // transferred_to_odoo (boolean) → status ODOO_SENT + odoo_sent_at. Paid
+  // orders become ODOO_SENT. Orders transcribed before their payment was
+  // confirmed stay PENDING_PAYMENT but keep the date; they move to ODOO_SENT
+  // when the admin confirms the payment (see updateOrder). The legacy columns
+  // are left untouched as a backup.
+  await runOnce("2026-10-odoo-status", [
+    `UPDATE orders
+     SET status = 'ODOO_SENT', odoo_sent_at = COALESCE(transferred_at, created_at)
+     WHERE transferred_to_odoo = 1 AND status = 'COMPLETED'`,
+    `UPDATE orders
+     SET odoo_sent_at = COALESCE(transferred_at, created_at)
+     WHERE transferred_to_odoo = 1 AND status = 'PENDING_PAYMENT'`,
+  ]);
+}
+
+// Data migrations must run exactly once: the code no longer writes the
+// columns they read from, so re-running them would undo later changes. The
+// statements and the bookkeeping row go in one transaction.
+async function runOnce(name: string, statements: string[]) {
+  const done = await db.execute({
+    sql: "SELECT 1 FROM schema_migrations WHERE name = ?",
+    args: [name],
+  });
+  if (done.rows.length > 0) return;
+  const results = await db.batch(
+    [...statements, { sql: "INSERT INTO schema_migrations (name) VALUES (?)", args: [name] }],
+    "write",
+  );
+  const affected = results.slice(0, -1).map((r) => r.rowsAffected).join(", ");
+  console.log(`✓ Data migration ${name} (filas: ${affected})`);
 }
 
 async function wipeData() {
   await db.batch(
     [
+      "DELETE FROM event_products",
+      "DELETE FROM event_promotions",
       "DELETE FROM product_promotions",
       "DELETE FROM promotion_items",
       "DELETE FROM promotions",

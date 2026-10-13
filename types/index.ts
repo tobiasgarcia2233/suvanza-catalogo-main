@@ -72,10 +72,50 @@ export interface OrderPayment {
   amount: number;
 }
 
+// Order lifecycle: PENDING_PAYMENT → COMPLETED (payment confirmed) → ODOO_SENT,
+// or ODOO_ERROR when the Odoo request failed (retry moves it to ODOO_SENT).
+export type OrderStatus =
+  | "PENDING_PAYMENT"
+  | "COMPLETED"
+  | "ODOO_SENT"
+  | "ODOO_ERROR";
+
+export const ORDER_STATUSES: OrderStatus[] = [
+  "PENDING_PAYMENT",
+  "COMPLETED",
+  "ODOO_SENT",
+  "ODOO_ERROR",
+];
+
+/** Statuses waiting to be sent to Odoo (never sent, or the last send failed). */
+export const ODOO_QUEUE_STATUSES: OrderStatus[] = ["COMPLETED", "ODOO_ERROR"];
+
+/**
+ * A closed sale: payment confirmed, whatever happened with Odoo afterwards.
+ * This is what every sales metric counts ("carro").
+ */
+export function isClosedSale(status: string): boolean {
+  return status === "COMPLETED" || status === "ODOO_SENT" || status === "ODOO_ERROR";
+}
+
+/**
+ * A seller can no longer edit or delete the order. Besides closed sales this
+ * covers legacy orders transcribed to Odoo before their payment was confirmed
+ * (still PENDING_PAYMENT, but with odoo_sent_at set).
+ */
+export function isOrderLocked(order: Pick<Order, "status" | "odoo_sent_at">): boolean {
+  return isClosedSale(order.status) || !!order.odoo_sent_at;
+}
+
 export interface Order {
   id: string; // uuid
   created_at: string;
-  status: "PENDING_PAYMENT" | "COMPLETED" | string;
+  status: OrderStatus | string;
+  /** null = venta "Individual" (fuera de cualquier evento). */
+  event_id?: string | null;
+  odoo_ref?: string | null;
+  odoo_error?: string | null;
+  odoo_sent_at?: string | null;
   date: {
     day: number;
     month: number;

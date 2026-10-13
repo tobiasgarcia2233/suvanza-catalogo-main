@@ -15,10 +15,7 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
 import { useCartStore } from "@/store/cartStore";
-import type { Order } from "@/types";
-
-// Runtime field not in the shared Order type — see lib/orderQueries.ts.
-type SellerOrder = Order & { transferred_to_odoo?: boolean };
+import { isOrderLocked, type Order } from "@/types";
 
 type Period = "today" | "week" | "month" | "all";
 type StatusFilter = "all" | "done" | "pending";
@@ -35,10 +32,6 @@ const STATUSES: { key: StatusFilter; label: string }[] = [
   { key: "pending", label: "Pendientes" },
   { key: "done", label: "Concretadas" },
 ];
-
-function isFinalized(order: SellerOrder) {
-  return order.status === "COMPLETED" || !!order.transferred_to_odoo;
-}
 
 function startOfDay(date: Date) {
   const d = new Date(date);
@@ -96,7 +89,7 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
   } = useUIStore();
   const { loadOrderForEdit } = useCartStore();
   const [isLoading, setIsLoading] = useState(false);
-  const [orders, setOrders] = useState<SellerOrder[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState<Period>("today");
@@ -150,7 +143,7 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
     let units = 0;
     for (const o of periodOrders) {
       total += o.total;
-      if (isFinalized(o)) {
+      if (isOrderLocked(o)) {
         done += 1;
         doneTotal += o.total;
       }
@@ -170,8 +163,8 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
   const visibleOrders = useMemo(() => {
     const q = query.trim().toLowerCase();
     return periodOrders.filter((o) => {
-      if (status === "done" && !isFinalized(o)) return false;
-      if (status === "pending" && isFinalized(o)) return false;
+      if (status === "done" && !isOrderLocked(o)) return false;
+      if (status === "pending" && isOrderLocked(o)) return false;
       if (!q) return true;
       const buyer = o.buyer_details;
       return (
@@ -186,7 +179,7 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
   // Day separators only earn their space once the list can span several days.
   const groups = useMemo(() => {
     if (period === "today") return [{ label: "", orders: visibleOrders }];
-    const out: { label: string; orders: SellerOrder[] }[] = [];
+    const out: { label: string; orders: Order[] }[] = [];
     for (const order of visibleOrders) {
       const label = dayLabel(order.created_at);
       const last = out[out.length - 1];
@@ -196,13 +189,13 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
     return out;
   }, [visibleOrders, period]);
 
-  const handleEdit = (order: SellerOrder) => {
+  const handleEdit = (order: Order) => {
     loadOrderForEdit(order, sellerSlug);
     closeSellerOrders();
     openCart();
   };
 
-  const handleDelete = (order: SellerOrder) => {
+  const handleDelete = (order: Order) => {
     openConfirmationModal({
       title: "Eliminar pedido",
       message: `¿Eliminar el pedido de ${order.buyer_details.name}?`,
@@ -455,14 +448,14 @@ function SellerOrderCard({
   onDelete,
   isDeleting,
 }: {
-  order: SellerOrder;
+  order: Order;
   expanded: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
   isDeleting: boolean;
 }) {
-  const finalized = isFinalized(order);
+  const finalized = isOrderLocked(order);
   const units = order.items.reduce((sum, it) => sum + (it.quantity || 0), 0);
   const combos = order.promos_sold ?? [];
 

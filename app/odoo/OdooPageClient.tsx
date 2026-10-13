@@ -6,16 +6,14 @@ import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
 import {
   ArrowLeft,
-  Check,
   CreditCard,
   Loader2,
   Printer,
   Send,
   StickyNote,
+  TriangleAlert,
   Undo2,
 } from "lucide-react";
-
-type OdooOrder = Order & { transferred_to_odoo?: boolean };
 
 export default function OdooPageClient({
   orders,
@@ -23,7 +21,7 @@ export default function OdooPageClient({
   startDate,
   endDate,
 }: {
-  orders: OdooOrder[];
+  orders: Order[];
   includeTransferred: boolean;
   startDate: string;
   endDate: string;
@@ -36,7 +34,7 @@ export default function OdooPageClient({
   const [localEnd, setLocalEnd] = useState(endDate);
 
   const selectableIds = useMemo(
-    () => orders.filter((o) => !o.transferred_to_odoo).map((o) => o.id),
+    () => orders.filter((o) => o.status !== "ODOO_SENT").map((o) => o.id),
     [orders],
   );
   const allSelected =
@@ -102,7 +100,7 @@ export default function OdooPageClient({
           </Link>
           <h1 className="font-bold text-3xl mt-1">Pasar a Odoo</h1>
           <p className="text-sm text-gray-500">
-            Listado preparado para transcribir a Odoo. Marcá los que ya pasaste.
+            Ventas cobradas listas para transcribir a Odoo. Marcá las que ya pasaste.
           </p>
         </div>
 
@@ -186,7 +184,7 @@ export default function OdooPageClient({
           <p className="text-gray-500">
             {includeTransferred
               ? "No hay pedidos en el rango seleccionado."
-              : "No hay pedidos pendientes de pasar a Odoo."}
+              : "No hay ventas cobradas pendientes de pasar a Odoo."}
           </p>
         </div>
       ) : (
@@ -210,12 +208,13 @@ function OrderCard({
   selected,
   onToggle,
 }: {
-  order: OdooOrder;
+  order: Order;
   selected: boolean;
   onToggle: () => void;
 }) {
-  const isTransferred = !!order.transferred_to_odoo;
-  const isCompleted = order.status === "COMPLETED";
+  // The page only lists paid orders (see fetchOrdersForOdoo).
+  const isTransferred = order.status === "ODOO_SENT";
+  const hasOdooError = order.status === "ODOO_ERROR";
   const created = new Date(order.created_at);
   const dateStr = created.toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -267,23 +266,29 @@ function OrderCard({
               </p>
             )}
             <div className="mt-1 flex items-center gap-1 justify-end">
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  isCompleted
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {isCompleted ? "Pagada" : "Pendiente"}
+              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-800">
+                Pagada
               </span>
               {isTransferred && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800">
                   <Send size={9} /> En Odoo
                 </span>
               )}
+              {hasOdooError && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-800">
+                  <TriangleAlert size={9} /> Error Odoo
+                </span>
+              )}
             </div>
           </div>
         </div>
+
+        {hasOdooError && order.odoo_error && (
+          <div className="mb-3 flex items-start gap-2 rounded-md bg-red-50 border border-red-100 px-3 py-1.5 text-sm text-red-900">
+            <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+            <span className="whitespace-pre-wrap">{order.odoo_error}</span>
+          </div>
+        )}
 
         {((order.payments && order.payments.length > 0) || order.notes) && (
           <div className="mb-3 flex flex-col gap-2">
@@ -363,11 +368,6 @@ function OrderCard({
           >
             <Printer size={12} /> Vista imprimible
           </a>
-          {isCompleted && (
-            <span className="inline-flex items-center gap-1 text-xs text-green-700">
-              <Check size={12} /> Cobrada
-            </span>
-          )}
         </div>
       </div>
     </div>
