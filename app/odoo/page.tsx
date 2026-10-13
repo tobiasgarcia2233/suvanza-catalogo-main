@@ -20,7 +20,7 @@ export default async function OdooDashboardPage({
 
   const { includeTransferred, startDate, endDate } = await searchParams;
   const orders = await fetchOrdersForOdoo({
-    includeTransferred: includeTransferred === "1",
+    includeSent: includeTransferred === "1",
     startDate,
     endDate,
   });

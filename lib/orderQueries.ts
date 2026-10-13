@@ -1,8 +1,11 @@
 import "server-only";
 import { db } from "./db";
-import type { Order, OrderPayment } from "@/types";
+import { ODOO_QUEUE_STATUSES, type Order, type OrderPayment } from "@/types";
 
 const isNumeric = (s: string) => /^\d+$/.test(s);
+
+// SQL twin of isClosedSale() in @/types — keep both in sync.
+const CLOSED_SALE_SQL = "'COMPLETED', 'ODOO_SENT', 'ODOO_ERROR'";
 
 type OrderRow = {
   id: string;
@@ -15,15 +18,17 @@ type OrderRow = {
   buyer_details: string;
   seller_name: string | null;
   auto_apply_promos: number;
-  transferred_to_odoo: number;
-  transferred_at: string | null;
+  event_id: string | null;
+  odoo_ref: string | null;
+  odoo_error: string | null;
+  odoo_sent_at: string | null;
   notes: string | null;
   payment_method: string | null;
   payments: string | null;
   promos_sold: string | null;
 };
 
-function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; transferred_at?: string | null } {
+function rowToOrder(r: OrderRow): Order {
   const date = r.order_date ? JSON.parse(r.order_date) : null;
   let payments: OrderPayment[] | null = null;
   if (r.payments) {
@@ -59,8 +64,10 @@ function rowToOrder(r: OrderRow): Order & { transferred_to_odoo?: boolean; trans
     buyer_details: JSON.parse(r.buyer_details),
     seller_name: r.seller_name ?? "",
     autoApplyPromos: !!r.auto_apply_promos,
-    transferred_to_odoo: !!r.transferred_to_odoo,
-    transferred_at: r.transferred_at,
+    event_id: r.event_id ?? null,
+    odoo_ref: r.odoo_ref ?? null,
+    odoo_error: r.odoo_error ?? null,
+    odoo_sent_at: r.odoo_sent_at ?? null,
     notes: r.notes,
     payment_method: r.payment_method,
     payments,
@@ -122,7 +129,7 @@ export async function getOrdersPulse(): Promise<{
   const res = await db.execute(
     `SELECT COUNT(*) AS count,
             MAX(created_at) AS latest,
-            COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS paid
+            COALESCE(SUM(CASE WHEN status IN (${CLOSED_SALE_SQL}) THEN 1 ELSE 0 END), 0) AS paid
      FROM orders`,
   );
   const row = res.rows[0] as unknown as {
@@ -140,7 +147,7 @@ export async function getOrdersPulse(): Promise<{
 export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
   // Unlike the admin dashboards, this keeps every order for the seller —
   // completed sales stay visible permanently instead of disappearing once
-  // they're paid or transferred to Odoo.
+  // they're paid or sent to Odoo.
   const res = await db.execute({
     sql: `SELECT * FROM orders
           WHERE LOWER(seller_name) = LOWER(?)
@@ -164,8 +171,8 @@ export async function createOrder(input: Omit<Order, "id" | "created_at"> & {
 }): Promise<string> {
   const id = input.id ?? crypto.randomUUID();
   await db.execute({
-    sql: `INSERT INTO orders (id, status, order_date, total, discounted_amount, items, buyer_details, seller_name, auto_apply_promos, promos_sold)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO orders (id, status, order_date, total, discounted_amount, items, buyer_details, seller_name, auto_apply_promos, promos_sold, event_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.status,
@@ -179,6 +186,7 @@ export async function createOrder(input: Omit<Order, "id" | "created_at"> & {
       input.promos_sold && input.promos_sold.length > 0
         ? JSON.stringify(input.promos_sold)
         : null,
+      input.event_id ?? null,
     ],
   });
   return id;
@@ -186,16 +194,20 @@ export async function createOrder(input: Omit<Order, "id" | "created_at"> & {
 
 export async function updateOrder(
   id: string,
-  patch: Partial<Omit<Order, "id" | "created_at">> & {
-    transferred_to_odoo?: boolean;
-  },
+  patch: Partial<
+    Omit<Order, "id" | "created_at" | "event_id" | "odoo_ref" | "odoo_error" | "odoo_sent_at">
+  >,
 ): Promise<void> {
   const updates: string[] = [];
   const args: (string | number | null)[] = [];
 
   if (patch.status !== undefined) {
-    updates.push("status = ?");
-    args.push(patch.status);
+    // Orders already transcribed to Odoo before their payment was confirmed
+    // (legacy) skip straight to ODOO_SENT once the payment lands.
+    updates.push(
+      "status = CASE WHEN ? = 'COMPLETED' AND odoo_sent_at IS NOT NULL THEN 'ODOO_SENT' ELSE ? END",
+    );
+    args.push(patch.status, patch.status);
   }
   if (patch.date !== undefined) {
     updates.push("order_date = ?");
@@ -233,12 +245,6 @@ export async function updateOrder(
         : null,
     );
   }
-  if (patch.transferred_to_odoo !== undefined) {
-    updates.push("transferred_to_odoo = ?");
-    args.push(patch.transferred_to_odoo ? 1 : 0);
-    updates.push("transferred_at = ?");
-    args.push(patch.transferred_to_odoo ? new Date().toISOString() : null);
-  }
   if (patch.notes !== undefined) {
     updates.push("notes = ?");
     args.push(patch.notes === null ? null : String(patch.notes));
@@ -272,16 +278,20 @@ export async function deleteOrder(id: string): Promise<void> {
 }
 
 export async function fetchOrdersForOdoo(options: {
-  includeTransferred?: boolean;
+  includeSent?: boolean;
   startDate?: string;
   endDate?: string;
 }): Promise<Order[]> {
-  const conditions: string[] = [];
+  // Only paid orders go to Odoo. By default the queue is what still needs
+  // sending (never sent, or the last attempt failed); includeSent adds the
+  // ones already in Odoo.
+  const conditions: string[] = [
+    options.includeSent
+      ? `status IN (${CLOSED_SALE_SQL})`
+      : `status IN (${ODOO_QUEUE_STATUSES.map((s) => `'${s}'`).join(", ")})`,
+  ];
   const args: (string | number)[] = [];
 
-  if (!options.includeTransferred) {
-    conditions.push("transferred_to_odoo = 0");
-  }
   if (options.startDate && options.endDate) {
     const end = new Date(options.endDate);
     end.setHours(23, 59, 59, 999);
@@ -290,9 +300,8 @@ export async function fetchOrdersForOdoo(options: {
     args.push(new Date(options.startDate).toISOString(), end.toISOString());
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const res = await db.execute({
-    sql: `SELECT * FROM orders ${where} ORDER BY created_at DESC`,
+    sql: `SELECT * FROM orders WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
     args,
   });
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
@@ -302,11 +311,11 @@ export async function getSellerSalesStats(
   sellerName: string,
 ): Promise<{ productsSold: number; cartsBuilt: number }> {
   // "Carro cerrado" = the sale closed: the seller received payment and
-  // handed over the product, i.e. status COMPLETED. Each order row counts
-  // once, even if the same buyer ordered more than once.
+  // handed over the product (see isClosedSale). Each order row counts once,
+  // even if the same buyer ordered more than once.
   const res = await db.execute({
     sql: `SELECT items FROM orders
-          WHERE LOWER(seller_name) = LOWER(?) AND status = 'COMPLETED'`,
+          WHERE LOWER(seller_name) = LOWER(?) AND status IN (${CLOSED_SALE_SQL})`,
     args: [sellerName],
   });
 
@@ -319,17 +328,42 @@ export async function getSellerSalesStats(
   return { productsSold, cartsBuilt: res.rows.length };
 }
 
-export async function bulkSetTransferred(
-  ids: string[],
-  transferred: boolean,
-): Promise<void> {
+export type OdooResult = { ok: true; ref?: string | null } | { ok: false; error: string };
+
+/**
+ * Records the outcome of sending paid orders to Odoo. Today the admin calls it
+ * by hand from /odoo ("ya lo pasé"); the future Odoo integration reports each
+ * request's result through here too. Orders not yet paid are left untouched.
+ */
+export async function setOdooResult(ids: string[], result: OdooResult): Promise<void> {
   if (ids.length === 0) return;
-  const now = new Date().toISOString();
+  const placeholders = ids.map(() => "?").join(", ");
+  const queue = ODOO_QUEUE_STATUSES.map((s) => `'${s}'`).join(", ");
+  if (result.ok) {
+    await db.execute({
+      sql: `UPDATE orders
+            SET status = 'ODOO_SENT', odoo_sent_at = ?, odoo_ref = ?, odoo_error = NULL
+            WHERE id IN (${placeholders}) AND status IN (${queue})`,
+      args: [new Date().toISOString(), result.ref ?? null, ...ids],
+    });
+  } else {
+    await db.execute({
+      sql: `UPDATE orders
+            SET status = 'ODOO_ERROR', odoo_error = ?
+            WHERE id IN (${placeholders}) AND status IN (${queue})`,
+      args: [result.error, ...ids],
+    });
+  }
+}
+
+/** Undoes a manual "sent to Odoo" mark: back to paid, waiting to be sent. */
+export async function resetOdooSent(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
   const placeholders = ids.map(() => "?").join(", ");
   await db.execute({
     sql: `UPDATE orders
-          SET transferred_to_odoo = ?, transferred_at = ?
-          WHERE id IN (${placeholders})`,
-    args: [transferred ? 1 : 0, transferred ? now : null, ...ids],
+          SET status = 'COMPLETED', odoo_sent_at = NULL, odoo_ref = NULL, odoo_error = NULL
+          WHERE id IN (${placeholders}) AND status = 'ODOO_SENT'`,
+    args: ids,
   });
 }

@@ -1,4 +1,4 @@
-import type { Order } from "@/types";
+import { isClosedSale, type Order } from "@/types";
 
 export function OrderPrintContent({ order }: { order: Order }) {
   const created = new Date(order.created_at);
@@ -41,7 +41,7 @@ export function OrderPrintContent({ order }: { order: Order }) {
           <p className="text-sm mt-2">
             Estado:{" "}
             <span className="font-semibold">
-              {order.status === "COMPLETED" ? "Pagada" : "Pendiente"}
+              {isClosedSale(order.status) ? "Pagada" : "Pendiente"}
             </span>
           </p>
         </div>

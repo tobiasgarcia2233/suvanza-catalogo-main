@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { bulkSetTransferred } from "@/lib/orderQueries";
+import { resetOdooSent, setOdooResult } from "@/lib/orderQueries";
 import { readSessionFromCookie } from "@/lib/auth";
 
+// Manual Odoo flow: the admin transcribes paid orders into Odoo and marks them
+// here as sent (or undoes the mark). Only paid orders are affected.
 export async function POST(request: Request) {
   const session = await readSessionFromCookie();
   if (!session) {
@@ -12,7 +14,8 @@ export async function POST(request: Request) {
     if (!Array.isArray(ids) || ids.some((x) => typeof x !== "string")) {
       return NextResponse.json({ message: "ids inválidos" }, { status: 400 });
     }
-    await bulkSetTransferred(ids, !!transferred);
+    if (transferred) await setOdooResult(ids, { ok: true });
+    else await resetOdooSent(ids);
     return NextResponse.json({ message: "ok", count: ids.length });
   } catch (err) {
     console.error("bulk-transfer error:", err);

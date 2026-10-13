@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Order } from "@/types";
+import { isClosedSale, type Order } from "@/types";
 import {
   Check,
   CheckCircle,
@@ -61,7 +61,7 @@ export function OrderRow({ order }: OrderRowProps) {
     };
   }, [menuOpen]);
 
-  const isCompleted = order.status === "COMPLETED";
+  const isCompleted = isClosedSale(order.status);
   const anyBusy = busy !== null || isPending;
   const hasNotes = !!(order.notes && order.notes.trim());
   const paymentsList = order.payments ?? [];

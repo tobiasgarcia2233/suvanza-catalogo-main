@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteOrder, updateOrder, getOrder } from "@/lib/orderQueries";
 import { getSellerBySlug } from "@/lib/sellerQueries";
 import { readSessionFromCookie } from "@/lib/auth";
+import { isOrderLocked } from "@/types";
 
 interface CartLine {
   id: string | number;
@@ -12,12 +13,9 @@ interface CartLine {
   discountPercentage: number;
 }
 
-// A sale is final once the shop confirms payment ("COMPLETED") or it's been
-// transferred to Odoo — from that point a seller can no longer touch it via
-// their personal link.
-function isFinalized(order: { status: string; transferred_to_odoo?: boolean }) {
-  return order.status === "COMPLETED" || !!order.transferred_to_odoo;
-}
+// Statuses the admin may set by hand. Odoo statuses only change through
+// setOdooResult (bulk-transfer today, the Odoo integration later).
+const ADMIN_SETTABLE_STATUSES = new Set(["PENDING_PAYMENT", "COMPLETED"]);
 
 export async function GET(
   _request: NextRequest,
@@ -52,7 +50,7 @@ export async function PATCH(
       if (!existing || existing.seller_name.toLowerCase() !== seller.name.toLowerCase()) {
         return NextResponse.json({ message: "Pedido no encontrado." }, { status: 404 });
       }
-      if (isFinalized(existing)) {
+      if (isOrderLocked(existing)) {
         return NextResponse.json(
           { message: "Esta venta ya fue confirmada y no puede editarse." },
           { status: 403 },
@@ -70,7 +68,7 @@ export async function PATCH(
 
     // Two shapes are accepted:
     // 1) Full edit from cart: { items, total, subtotal, buyerName, buyerDni, buyerPhone, autoApplyPromos? }
-    // 2) Partial status update: { status? , transferred_to_odoo? } — admin only.
+    // 2) Partial status update: { status?, notes?, payments? } — admin only.
     const patch: Parameters<typeof updateOrder>[1] = {};
 
     if (Array.isArray(body.items) && body.total !== undefined) {
@@ -100,9 +98,11 @@ export async function PATCH(
     // Admin-only fields: a seller editing via their personal link may only
     // touch the "full edit from cart" shape handled above.
     if (!isSellerEdit) {
-      if (body.status !== undefined) patch.status = body.status;
-      if (body.transferred_to_odoo !== undefined) {
-        patch.transferred_to_odoo = !!body.transferred_to_odoo;
+      if (body.status !== undefined) {
+        if (!ADMIN_SETTABLE_STATUSES.has(body.status)) {
+          return NextResponse.json({ message: "Estado inválido." }, { status: 400 });
+        }
+        patch.status = body.status;
       }
       if (body.notes !== undefined) {
         patch.notes = body.notes === null ? null : String(body.notes);
@@ -165,7 +165,7 @@ export async function DELETE(
       if (!order || order.seller_name.toLowerCase() !== seller.name.toLowerCase()) {
         return NextResponse.json({ message: "Pedido no encontrado." }, { status: 404 });
       }
-      if (isFinalized(order)) {
+      if (isOrderLocked(order)) {
         return NextResponse.json(
           { message: "Esta venta ya fue confirmada y no puede eliminarse." },
           { status: 403 },

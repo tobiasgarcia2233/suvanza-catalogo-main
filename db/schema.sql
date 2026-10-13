@@ -99,7 +99,50 @@ CREATE TABLE IF NOT EXISTS orders (
   transferred_at TEXT,
   notes TEXT,
   payment_method TEXT,
-  payments TEXT
+  payments TEXT,
+  -- NULL = venta "Individual" (fuera de cualquier evento)
+  event_id TEXT REFERENCES events(id),
+  odoo_ref TEXT,
+  odoo_error TEXT,
+  odoo_sent_at TEXT
+  -- transferred_to_odoo / transferred_at: legacy, replaced by status ODOO_SENT
+  -- and odoo_sent_at. Kept unused as a backup until the migration is confirmed.
+);
+
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  -- active | closed. Only the admin closes an event, which stops its sales.
+  status TEXT NOT NULL DEFAULT 'active',
+  starts_at TEXT,
+  ends_at TEXT,
+  closed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS event_sellers (
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  seller_id TEXT NOT NULL REFERENCES sellers(id) ON DELETE CASCADE,
+  PRIMARY KEY (event_id, seller_id)
+);
+
+CREATE TABLE IF NOT EXISTS event_products (
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  PRIMARY KEY (event_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS event_promotions (
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  promotion_id TEXT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+  PRIMARY KEY (event_id, promotion_id)
+);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  -- One-off data migrations already applied (see scripts/migrate.ts)
+  name TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
@@ -113,3 +156,6 @@ CREATE INDEX IF NOT EXISTS idx_variants_product ON variants(product_id);
 CREATE INDEX IF NOT EXISTS idx_promotion_items_promo ON promotion_items(promotion_id);
 CREATE INDEX IF NOT EXISTS idx_product_categories_product ON product_categories(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_categories_category ON product_categories(category_id);
+CREATE INDEX IF NOT EXISTS idx_event_sellers_seller ON event_sellers(seller_id);
+CREATE INDEX IF NOT EXISTS idx_event_products_product ON event_products(product_id);
+CREATE INDEX IF NOT EXISTS idx_event_promotions_promotion ON event_promotions(promotion_id);

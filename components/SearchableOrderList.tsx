@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Order } from "@/types";
+import { isClosedSale, type Order } from "@/types";
 import { OrderRow } from "./OrderRow";
 import { ChevronDown, Search, X } from "lucide-react";
 import { isRefreshPaused } from "@/store/refreshGuardStore";
@@ -87,7 +87,7 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
     let pending = 0;
     for (const o of initialOrders) {
       grand += o.total;
-      if (o.status === "COMPLETED") paid += o.total;
+      if (isClosedSale(o.status)) paid += o.total;
       else pending += o.total;
     }
     return { grand, paid, pending };

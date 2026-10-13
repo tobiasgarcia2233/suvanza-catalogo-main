@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 // This endpoint exists only as a placeholder for a future "send to Odoo" button.
 export async function POST() {
   return NextResponse.json(
-    { message: "Odoo sync is not configured. Mark the order as transferred from the dashboard." },
+    { message: "Odoo sync is not configured. Mark the order as sent from the /odoo dashboard." },
     { status: 410 },
   );
 }
