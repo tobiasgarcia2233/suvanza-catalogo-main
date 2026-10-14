@@ -17,7 +17,7 @@ import { useUIStore } from "@/store/uiStore";
 import { useCartStore } from "@/store/cartStore";
 import { isOrderLocked, type Order } from "@/types";
 
-type Period = "today" | "week" | "month" | "all";
+export type Period = "today" | "week" | "month" | "all";
 type StatusFilter = "all" | "done" | "pending";
 
 const PERIODS: { key: Period; label: string }[] = [
@@ -80,7 +80,19 @@ function timeLabel(iso: string) {
   });
 }
 
-export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
+export function SellerOrdersPanel({
+  sellerSlug,
+  context,
+  readOnly = false,
+  defaultPeriod = "today",
+}: {
+  sellerSlug: string;
+  /** "individual" or an event id: only that context's sales are listed. */
+  context: string;
+  /** Closed event: sales stay visible but can't be edited or deleted. */
+  readOnly?: boolean;
+  defaultPeriod?: Period;
+}) {
   const {
     openConfirmationModal,
     openCart,
@@ -92,7 +104,7 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [period, setPeriod] = useState<Period>("today");
+  const [period, setPeriod] = useState<Period>(defaultPeriod);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -102,7 +114,7 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
     setError("");
     try {
       const res = await fetch(
-        `/api/orders?sellerSlug=${encodeURIComponent(sellerSlug)}`,
+        `/api/orders?sellerSlug=${encodeURIComponent(sellerSlug)}&event=${encodeURIComponent(context)}`,
       );
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -412,6 +424,7 @@ export function SellerOrdersPanel({ sellerSlug }: { sellerSlug: string }) {
                         onEdit={() => handleEdit(order)}
                         onDelete={() => handleDelete(order)}
                         isDeleting={deletingId === order.id}
+                        readOnly={readOnly}
                       />
                     ))}
                   </ul>
@@ -447,6 +460,7 @@ function SellerOrderCard({
   onEdit,
   onDelete,
   isDeleting,
+  readOnly,
 }: {
   order: Order;
   expanded: boolean;
@@ -454,6 +468,7 @@ function SellerOrderCard({
   onEdit: () => void;
   onDelete: () => void;
   isDeleting: boolean;
+  readOnly: boolean;
 }) {
   const finalized = isOrderLocked(order);
   const units = order.items.reduce((sum, it) => sum + (it.quantity || 0), 0);
@@ -516,6 +531,13 @@ function SellerOrderCard({
             >
               <CheckCircle2 size={14} />
               <span className="hidden sm:inline">Concretada</span>
+            </span>
+          ) : readOnly ? (
+            <span
+              className="bg-yellow-100 px-2 py-1 rounded-full font-medium text-yellow-800 text-xs"
+              title="Pendiente de pago"
+            >
+              Pendiente
             </span>
           ) : (
             <div className="flex items-center gap-0.5">

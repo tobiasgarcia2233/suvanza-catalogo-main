@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
+import type { EventOption } from "@/lib/eventQueries";
+import { EventFilterSelect } from "@/components/EventFilterSelect";
 import {
   ArrowLeft,
   CreditCard,
@@ -20,11 +22,16 @@ export default function OdooPageClient({
   includeTransferred,
   startDate,
   endDate,
+  event,
+  events,
 }: {
   orders: Order[];
   includeTransferred: boolean;
   startDate: string;
   endDate: string;
+  /** "" | "individual" | event id */
+  event: string;
+  events: EventOption[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -55,11 +62,17 @@ export default function OdooPageClient({
     });
   }
 
-  function pushFilters(nextIncludeTransferred?: boolean) {
+  const eventNames = useMemo(() => new Map(events.map((e) => [e.id, e.name])), [events]);
+
+  function pushFilters(
+    next: { includeTransferred?: boolean; event?: string } = {},
+  ) {
     const params = new URLSearchParams();
-    if (nextIncludeTransferred ?? includeTransferred) {
+    if (next.includeTransferred ?? includeTransferred) {
       params.set("includeTransferred", "1");
     }
+    const nextEvent = next.event ?? event;
+    if (nextEvent) params.set("event", nextEvent);
     if (localStart) params.set("startDate", localStart);
     if (localEnd) params.set("endDate", localEnd);
     const qs = params.toString();
@@ -105,11 +118,20 @@ export default function OdooPageClient({
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <EventFilterSelect
+            events={events}
+            value={event}
+            onChange={(v) => {
+              setSelected(new Set());
+              pushFilters({ event: v });
+            }}
+            className="rounded border border-gray-300 px-2 py-1.5 text-sm bg-white"
+          />
           <label className="inline-flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={includeTransferred}
-              onChange={(e) => pushFilters(e.target.checked)}
+              onChange={(e) => pushFilters({ includeTransferred: e.target.checked })}
             />
             Mostrar ya pasadas
           </label>
@@ -195,6 +217,11 @@ export default function OdooPageClient({
               order={order}
               selected={selected.has(order.id)}
               onToggle={() => toggle(order.id)}
+              eventName={
+                order.event_id
+                  ? eventNames.get(order.event_id) ?? "Evento eliminado"
+                  : "Venta individual"
+              }
             />
           ))}
         </div>
@@ -207,10 +234,12 @@ function OrderCard({
   order,
   selected,
   onToggle,
+  eventName,
 }: {
   order: Order;
   selected: boolean;
   onToggle: () => void;
+  eventName: string;
 }) {
   // The page only lists paid orders (see fetchOrdersForOdoo).
   const isTransferred = order.status === "ODOO_SENT";
@@ -252,7 +281,8 @@ function OrderCard({
               DNI: {order.buyer_details.dni} · Tel: {order.buyer_details.phone}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              Vendedor: <span className="font-medium">{order.seller_name}</span> ·{" "}
+              Atendió: <span className="font-medium">{order.seller_name}</span> ·{" "}
+              {eventName} ·{" "}
               {dateStr} {timeStr} hs
             </p>
           </div>

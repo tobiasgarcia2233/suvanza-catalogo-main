@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { getAllProducts, getAllPromotions } from "./productQueries";
 import { getAllCategories } from "./categoryQueries";
 import { getSellerBySlug } from "./sellerQueries";
+import { getEventBySlug, getEventsForSeller } from "./eventQueries";
 
 /**
  * Cache tags for on-demand revalidation.
@@ -11,11 +12,13 @@ import { getSellerBySlug } from "./sellerQueries";
  * sales day, so instead of hitting Turso on every visit we serve a cached copy
  * and bust it explicitly when the admin edits something — see
  * `revalidateCatalog()` / `revalidateSellers()`, called from the mutation API
- * routes. `revalidate: 3600` is only a self-healing safety net for the case
- * where a bust is missed (a migration, a manual DB edit).
+ * routes (`revalidateEvents()` for events). `revalidate: 3600` is only a
+ * self-healing safety net for the case where a bust is missed (a migration, a
+ * manual DB edit).
  */
 export const CATALOG_TAG = "catalog";
 export const SELLERS_TAG = "sellers";
+export const EVENTS_TAG = "events";
 
 const CACHE_TTL_SECONDS = 3600;
 
@@ -42,5 +45,21 @@ export function getCachedSellerBySlug(slug: string) {
     () => getSellerBySlug(slug),
     ["catalog:seller-by-slug", slug],
     { tags: [SELLERS_TAG], revalidate: CACHE_TTL_SECONDS },
+  )();
+}
+
+export function getCachedEventBySlug(slug: string) {
+  return unstable_cache(
+    () => getEventBySlug(slug),
+    ["events:by-slug", slug],
+    { tags: [EVENTS_TAG], revalidate: CACHE_TTL_SECONDS },
+  )();
+}
+
+export function getCachedSellerEvents(sellerId: string) {
+  return unstable_cache(
+    () => getEventsForSeller(sellerId),
+    ["events:by-seller", sellerId],
+    { tags: [EVENTS_TAG], revalidate: CACHE_TTL_SECONDS },
   )();
 }

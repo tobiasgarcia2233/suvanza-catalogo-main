@@ -1,6 +1,7 @@
 import { readSessionFromCookie } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { fetchOrdersForOdoo } from "@/lib/orderQueries";
+import { getEventOptions } from "@/lib/eventQueries";
 import OdooPageClient from "./OdooPageClient";
 
 export const dynamic = "force-dynamic";
@@ -13,17 +14,22 @@ export default async function OdooDashboardPage({
     includeTransferred?: string;
     startDate?: string;
     endDate?: string;
+    event?: string;
   }>;
 }) {
   const session = await readSessionFromCookie();
   if (!session) redirect("/?next=/odoo");
 
-  const { includeTransferred, startDate, endDate } = await searchParams;
-  const orders = await fetchOrdersForOdoo({
-    includeSent: includeTransferred === "1",
-    startDate,
-    endDate,
-  });
+  const { includeTransferred, startDate, endDate, event } = await searchParams;
+  const [orders, events] = await Promise.all([
+    fetchOrdersForOdoo({
+      includeSent: includeTransferred === "1",
+      startDate,
+      endDate,
+      event,
+    }),
+    getEventOptions(),
+  ]);
 
   return (
     <OdooPageClient
@@ -31,6 +37,8 @@ export default async function OdooDashboardPage({
       includeTransferred={includeTransferred === "1"}
       startDate={startDate ?? ""}
       endDate={endDate ?? ""}
+      event={event ?? ""}
+      events={events}
     />
   );
 }

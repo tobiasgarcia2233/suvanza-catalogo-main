@@ -2,7 +2,7 @@
 
 import { ShoppingCart } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
-import { useCartStore } from "@/store/cartStore";
+import { CART_STORAGE_KEY, useCartStorage, useCartStore } from "@/store/cartStore";
 import { CartModal } from "@/components/CartModal";
 import { OrderInfoModal } from "@/components/OrderInfoModal";
 
@@ -15,13 +15,20 @@ export const ADMIN_ORDER_NAME = "Nico Angelucci";
 // dashboard so the checkout flow stays identical everywhere.
 export function CartFab({
   sellerName = ADMIN_ORDER_NAME,
+  eventId = null,
+  storageKey = CART_STORAGE_KEY,
   variant = "brand",
   onOrderSuccess,
 }: {
   sellerName?: string;
+  /** Event new orders belong to; null = "Individual" / admin. */
+  eventId?: string | null;
+  /** localStorage key of this page's cart (see useCartStorage). */
+  storageKey?: string;
   variant?: "brand" | "dark";
   onOrderSuccess?: () => void;
 }) {
+  useCartStorage(storageKey);
   const openCart = useUIStore((s) => s.openCart);
   const items = useCartStore((s) => s.items);
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -46,6 +53,7 @@ export function CartFab({
       <CartModal />
       <OrderInfoModal
         sellerName={sellerName}
+        eventId={eventId}
         onOrderSuccess={onOrderSuccess ?? (() => {})}
       />
     </>

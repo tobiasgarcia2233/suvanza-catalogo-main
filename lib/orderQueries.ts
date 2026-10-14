@@ -5,7 +5,7 @@ import { ODOO_QUEUE_STATUSES, type Order, type OrderPayment } from "@/types";
 const isNumeric = (s: string) => /^\d+$/.test(s);
 
 // SQL twin of isClosedSale() in @/types — keep both in sync.
-const CLOSED_SALE_SQL = "'COMPLETED', 'ODOO_SENT', 'ODOO_ERROR'";
+export const CLOSED_SALE_SQL = "'COMPLETED', 'ODOO_SENT', 'ODOO_ERROR'";
 
 type OrderRow = {
   id: string;
@@ -75,13 +75,43 @@ function rowToOrder(r: OrderRow): Order {
   };
 }
 
+/**
+ * Admin dashboard filter by sales context: "individual" (no event), an event
+ * id, or undefined / "" for every order.
+ */
+function eventCondition(event: string | undefined): { sql: string; args: string[] } | null {
+  if (!event) return null;
+  // "individual" = INDIVIDUAL_EVENT_SLUG (lib/eventQueries imports this file).
+  if (event === "individual") return { sql: "event_id IS NULL", args: [] };
+  return { sql: "event_id = ?", args: [event] };
+}
+
+/** Admin dashboard filter by order status. */
+export type OrderStatusFilter = "pending" | "paid" | "odoo_error";
+
+const STATUS_CONDITIONS: Record<OrderStatusFilter, string> = {
+  pending: "status = 'PENDING_PAYMENT'",
+  paid: `status IN (${CLOSED_SALE_SQL})`,
+  odoo_error: "status = 'ODOO_ERROR'",
+};
+
 export async function fetchRecentOrders(
   query?: string,
   startDate?: string,
   endDate?: string,
+  filters: { event?: string; status?: OrderStatusFilter } = {},
 ): Promise<Order[]> {
   const conditions: string[] = [];
   const args: (string | number)[] = [];
+
+  const byEvent = eventCondition(filters.event);
+  if (byEvent) {
+    conditions.push(byEvent.sql);
+    args.push(...byEvent.args);
+  }
+  if (filters.status && STATUS_CONDITIONS[filters.status]) {
+    conditions.push(STATUS_CONDITIONS[filters.status]);
+  }
 
   if (startDate && endDate) {
     const end = new Date(endDate);
@@ -89,7 +119,9 @@ export async function fetchRecentOrders(
     conditions.push("created_at >= ?");
     conditions.push("created_at <= ?");
     args.push(new Date(startDate).toISOString(), end.toISOString());
-  } else {
+  } else if (!filters.event || filters.event === "individual") {
+    // Without dates the dashboard shows the last 24 hs — except for an event,
+    // which spans several days: then every order of the event is listed.
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     conditions.push("created_at >= ?");
     args.push(since);
@@ -144,15 +176,27 @@ export async function getOrdersPulse(): Promise<{
   };
 }
 
-export async function fetchOrdersBySeller(sellerName: string): Promise<Order[]> {
+export async function fetchOrdersBySeller(
+  sellerName: string,
+  /** undefined = every order, null = "Individual" only, string = that event. */
+  eventId?: string | null,
+): Promise<Order[]> {
   // Unlike the admin dashboards, this keeps every order for the seller —
   // completed sales stay visible permanently instead of disappearing once
   // they're paid or sent to Odoo.
+  const conditions = ["LOWER(seller_name) = LOWER(?)"];
+  const args: string[] = [sellerName];
+  if (eventId === null) {
+    conditions.push("event_id IS NULL");
+  } else if (eventId !== undefined) {
+    conditions.push("event_id = ?");
+    args.push(eventId);
+  }
   const res = await db.execute({
     sql: `SELECT * FROM orders
-          WHERE LOWER(seller_name) = LOWER(?)
+          WHERE ${conditions.join(" AND ")}
           ORDER BY created_at DESC`,
-    args: [sellerName],
+    args,
   });
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
 }
@@ -281,6 +325,7 @@ export async function fetchOrdersForOdoo(options: {
   includeSent?: boolean;
   startDate?: string;
   endDate?: string;
+  event?: string;
 }): Promise<Order[]> {
   // Only paid orders go to Odoo. By default the queue is what still needs
   // sending (never sent, or the last attempt failed); includeSent adds the
@@ -291,6 +336,12 @@ export async function fetchOrdersForOdoo(options: {
       : `status IN (${ODOO_QUEUE_STATUSES.map((s) => `'${s}'`).join(", ")})`,
   ];
   const args: (string | number)[] = [];
+
+  const byEvent = eventCondition(options.event);
+  if (byEvent) {
+    conditions.push(byEvent.sql);
+    args.push(...byEvent.args);
+  }
 
   if (options.startDate && options.endDate) {
     const end = new Date(options.endDate);

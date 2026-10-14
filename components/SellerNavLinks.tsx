@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { sellerSlugFromPath } from "@/lib/sellerRoutes";
+import { parseSellerPath } from "@/lib/sellerRoutes";
 import { useUIStore } from "@/store/uiStore";
 
 export default function SellerNavLinks({
@@ -16,8 +16,9 @@ export default function SellerNavLinks({
   const { isSellerOrdersOpen, openSellerOrders, closeSellerOrders } =
     useUIStore();
 
-  const sellerSlug = sellerSlugFromPath(pathname);
-  if (!sellerSlug) return null;
+  const path = parseSellerPath(pathname);
+  if (!path) return null;
+  const { sellerSlug, contextSlug } = path;
 
   const vertical = orientation === "vertical";
 
@@ -43,23 +44,40 @@ export default function SellerNavLinks({
             closeSellerOrders();
             onNavigate?.();
           }}
-          className={itemClass(!isSellerOrdersOpen)}
+          className={itemClass(!contextSlug)}
         >
-          Catálogo
+          Mis eventos
         </Link>
       </li>
-      <li>
-        <button
-          type="button"
-          onClick={() => {
-            openSellerOrders();
-            onNavigate?.();
-          }}
-          className={itemClass(isSellerOrdersOpen)}
-        >
-          Mis ventas
-        </button>
-      </li>
+      {/* Catalog and sales belong to a context (an event or "Individual"). */}
+      {contextSlug && (
+        <>
+          <li>
+            <Link
+              href={`/${sellerSlug}/${contextSlug}`}
+              onClick={() => {
+                closeSellerOrders();
+                onNavigate?.();
+              }}
+              className={itemClass(!isSellerOrdersOpen)}
+            >
+              Catálogo
+            </Link>
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                openSellerOrders();
+                onNavigate?.();
+              }}
+              className={itemClass(isSellerOrdersOpen)}
+            >
+              Mis ventas
+            </button>
+          </li>
+        </>
+      )}
     </ul>
   );
 }

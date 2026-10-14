@@ -1,6 +1,7 @@
 // @ts-nocheck
 "use client";
 
+import { useEffect } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import {
@@ -400,6 +401,13 @@ function recalculateAndSetState(items: CartItem[]): Partial<CartState> {
     comboNotice: null,
   };
 }
+/** Admin screens' cart; seller carts get one key per sales context. */
+export const CART_STORAGE_KEY = "suvanza-cart-storage";
+
+export function sellerCartStorageKey(sellerSlug: string, context: string) {
+  return `${CART_STORAGE_KEY}:${sellerSlug}:${context}`;
+}
+
 export const useCartStore = create(
   persist<CartState, [], [], Omit<CartState, "comboSelection" | "comboNotice">>(
     (set, get) => ({
@@ -724,8 +732,11 @@ export const useCartStore = create(
       },
     }),
     {
-      name: "suvanza-cart-storage",
+      name: CART_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
+      // Which cart to load depends on the page (see useCartStorage), so the
+      // page triggers hydration instead of the store doing it on import.
+      skipHydration: true,
       // A dialog is temporary. Keep the existing cart persistence format and
       // never save unconfirmed choices or snapshots of the catalog.
       partialize: ({ comboSelection, comboNotice, ...state }) => state,
@@ -759,3 +770,30 @@ useProductsStore.subscribe((catalog, previous) => {
   }
   useCartStore.setState({ ...priced, comboSelection: selection, comboNotice: null });
 });
+
+let activeCartKey: string | null = null;
+
+/**
+ * Points the cart at its own localStorage key, so each sales context (an event,
+ * "Individual", the admin screens) keeps a separate cart: products of one event
+ * never leak into another, and two tabs on different contexts don't overwrite
+ * each other. Mounted once per page by CartFab.
+ */
+export function useCartStorage(key: string) {
+  useEffect(() => switchCartStorage(key), [key]);
+}
+
+export function switchCartStorage(key: string) {
+  if (activeCartKey === key) return;
+  activeCartKey = key;
+  useCartStore.persist.setOptions({ name: key });
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(key);
+  } catch {
+    /* storage unavailable — start empty */
+  }
+  if (saved) useCartStore.persist.rehydrate();
+  // Nothing saved for this context: don't carry over the previous one's cart.
+  else useCartStore.getState().clearCart();
+}

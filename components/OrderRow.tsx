@@ -25,11 +25,13 @@ import PrintOrderModal from "./PrintOrderModal";
 
 interface OrderRowProps {
   order: Order;
+  /** Sales context shown under who made the sale. */
+  eventName?: string;
 }
 
 type Busy = null | "paying" | "deleting" | "editing";
 
-export function OrderRow({ order }: OrderRowProps) {
+export function OrderRow({ order, eventName }: OrderRowProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState<Busy>(null);
@@ -217,6 +219,9 @@ export function OrderRow({ order }: OrderRowProps) {
         </div>
         <div>
           <p>{order.seller_name}</p>
+          {eventName && (
+            <p className="text-text-secondary text-xs">{eventName}</p>
+          )}
         </div>
         <div>
           <p>{formattedDate}</p>

@@ -60,7 +60,7 @@ export default function SellersManager({
           setSellers((prev) => prev.filter((s) => s.id !== seller.id));
           router.refresh();
         } catch {
-          alert("No se pudo eliminar el vendedor.");
+          alert("No se pudo quitar el acceso.");
         } finally {
           setDeletingId(null);
         }
@@ -91,7 +91,7 @@ export default function SellersManager({
       >
         <div className="flex-1">
           <label htmlFor="sellerName" className="block text-xs font-medium text-gray-500 mb-1">
-            Nombre del vendedor
+            Nombre
           </label>
           <input
             id="sellerName"
@@ -172,7 +172,7 @@ export default function SellersManager({
             {sellers.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-6 px-4 text-center text-gray-400">
-                  Todavía no hay vendedores con acceso.
+                  Todavía nadie tiene acceso.
                 </td>
               </tr>
             )}

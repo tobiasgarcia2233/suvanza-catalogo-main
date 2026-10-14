@@ -39,7 +39,7 @@ export default function CatalogPageClient({
           <div>
             <h1 className="font-bold text-2xl">Catálogo</h1>
             <p className="text-sm text-gray-500">
-              Vista de referencia del catálogo tal como lo ven las vendedoras.
+              Vista de referencia del catálogo tal como se ve desde los links de venta.
             </p>
           </div>
           <ViewModeSwitch viewMode={viewMode} setViewMode={setViewMode} />
