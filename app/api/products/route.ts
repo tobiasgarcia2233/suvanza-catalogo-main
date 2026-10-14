@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { OdooError } from "@/lib/odooClient";
 import { createProduct } from "@/lib/productMutations";
 import { readSessionFromCookie } from "@/lib/auth";
 import { getCachedProducts } from "@/lib/catalogCache";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     revalidateCatalog();
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
+    if (err instanceof OdooError) return NextResponse.json({ message: err.message }, { status: err.status });
     console.error("POST /api/products", err);
     return NextResponse.json(
       { message: err instanceof Error ? err.message : "Error" },

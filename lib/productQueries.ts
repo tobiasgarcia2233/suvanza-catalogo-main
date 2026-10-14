@@ -7,6 +7,7 @@ type Row = Record<string, unknown>;
 function readProduct(row: Row): Product {
   return {
     id: row.id as string,
+    legacyOdooProductId: row.odoo_product_id == null ? null : Number(row.odoo_product_id),
     brand: (row.brand as string | null) ?? undefined,
     name: row.name as string,
     categoryIds: [],
@@ -91,6 +92,7 @@ export async function getAllProducts(): Promise<Product[]> {
     if (!p) continue;
     const v: Variant = {
       id: row.id as string,
+      odooProductId: row.odoo_product_id == null ? null : Number(row.odoo_product_id),
       name: row.name as string,
       imageUrls: [],
       priceTiers: [],
@@ -197,6 +199,7 @@ export async function getProduct(id: string): Promise<Product | null> {
   for (const row of varRes.rows as unknown as Row[]) {
     product.variants!.push({
       id: row.id as string,
+      odooProductId: row.odoo_product_id == null ? null : Number(row.odoo_product_id),
       name: row.name as string,
       imageUrls: [],
       priceTiers: [],

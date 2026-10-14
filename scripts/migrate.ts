@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@libsql/client";
+import { migrateOdooExports } from "../db/odooExportMigration";
+import { migrateOdooProductLink } from "../db/odooProductMigration";
 import { realProducts, allCrossPromotions } from "../lib/product-data";
 import type { Product, PriceTier, Variant, CrossPromotion } from "../types";
 
@@ -24,6 +26,10 @@ async function applySchema() {
     await db.execute(stmt);
   }
   console.log(`✓ Applied schema (${statements.length} statements)`);
+  const pendingOdooLinks = await migrateOdooProductLink(db);
+  if (pendingOdooLinks.length) console.table(pendingOdooLinks);
+
+  await migrateOdooExports(db);
 
   // Backfill the product ↔ category join table from the old single-category
   // column, then drop it. Safe to run repeatedly: no-op once the column is gone.

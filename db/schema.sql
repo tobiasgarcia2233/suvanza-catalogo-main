@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
+  -- Legacy parent reference retained until explicitly reconciled.
+  odoo_product_id INTEGER,
   brand TEXT,
   name TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS product_categories (
 
 CREATE TABLE IF NOT EXISTS variants (
   id TEXT PRIMARY KEY,
+  odoo_product_id INTEGER,
   product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0
@@ -159,3 +162,25 @@ CREATE INDEX IF NOT EXISTS idx_product_categories_category ON product_categories
 CREATE INDEX IF NOT EXISTS idx_event_sellers_seller ON event_sellers(seller_id);
 CREATE INDEX IF NOT EXISTS idx_event_products_product ON event_products(product_id);
 CREATE INDEX IF NOT EXISTS idx_event_promotions_promotion ON event_promotions(promotion_id);
+
+
+-- Durable Odoo outbox: separate from local payment status.
+CREATE TABLE IF NOT EXISTS odoo_exports (
+  order_id TEXT PRIMARY KEY REFERENCES orders(id),
+  status TEXT NOT NULL DEFAULT 'pending',
+  snapshot TEXT NOT NULL,
+  partner_id INTEGER,
+  quotation_id INTEGER UNIQUE,
+  quotation_ref TEXT,
+  phase TEXT NOT NULL DEFAULT 'ready',
+  payload TEXT,
+  candidates TEXT,
+  error TEXT,
+  lock_token TEXT,
+  locked_until INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS odoo_customer_claims (
+  document_key TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL
+);

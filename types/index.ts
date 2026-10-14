@@ -7,6 +7,7 @@ export interface PriceTier {
 
 export interface Variant {
   id: string;
+  odooProductId?: number | null;
   name: string;
   imageUrls?: string[];
   priceTiers?: PriceTier[];
@@ -19,6 +20,8 @@ export interface Category {
 
 export interface Product {
   id: number | string;
+  /** Unresolved reference from the former parent-level integration. */
+  legacyOdooProductId?: number | null;
   brand?: string;
   name: string;
   categoryIds?: string[];
@@ -27,6 +30,12 @@ export interface Product {
   imageUrls: string[];
   variants?: Variant[];
   crossProductPromotions?: CrossPromotion[];
+}
+
+export interface OdooProduct {
+  id: number;
+  name: string;
+  companyName: string;
 }
 
 export interface CartItem extends Product {
@@ -72,8 +81,8 @@ export interface OrderPayment {
   amount: number;
 }
 
-// Order lifecycle: PENDING_PAYMENT → COMPLETED (payment confirmed) → ODOO_SENT,
-// or ODOO_ERROR when the Odoo request failed (retry moves it to ODOO_SENT).
+// Payment lifecycle: PENDING_PAYMENT → COMPLETED. New exports use odoo_exports.
+// ODOO_SENT / ODOO_ERROR remain readable for historical manual transfers.
 export type OrderStatus =
   | "PENDING_PAYMENT"
   | "COMPLETED"
@@ -114,6 +123,7 @@ export interface Order {
   /** null = venta "Individual" (fuera de cualquier evento). */
   event_id?: string | null;
   odoo_ref?: string | null;
+  odoo_export_status?: string | null;
   odoo_error?: string | null;
   odoo_sent_at?: string | null;
   date: {

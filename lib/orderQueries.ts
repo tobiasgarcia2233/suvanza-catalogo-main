@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "./db";
+import { snapshotOrder } from "./odooExport";
 import { ODOO_QUEUE_STATUSES, type Order, type OrderPayment } from "@/types";
 
 const isNumeric = (s: string) => /^\d+$/.test(s);
@@ -25,6 +26,7 @@ type OrderRow = {
   notes: string | null;
   payment_method: string | null;
   payments: string | null;
+  odoo_export_status?: string;
   promos_sold: string | null;
 };
 
@@ -66,6 +68,7 @@ function rowToOrder(r: OrderRow): Order {
     autoApplyPromos: !!r.auto_apply_promos,
     event_id: r.event_id ?? null,
     odoo_ref: r.odoo_ref ?? null,
+    odoo_export_status: r.odoo_export_status ?? null,
     odoo_error: r.odoo_error ?? null,
     odoo_sent_at: r.odoo_sent_at ?? null,
     notes: r.notes,
@@ -140,7 +143,7 @@ export async function fetchRecentOrders(
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const res = await db.execute({
-    sql: `SELECT * FROM orders ${where} ORDER BY created_at DESC`,
+    sql: `SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders ${where} ORDER BY created_at DESC`,
     args,
   });
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
@@ -193,7 +196,7 @@ export async function fetchOrdersBySeller(
     args.push(eventId);
   }
   const res = await db.execute({
-    sql: `SELECT * FROM orders
+    sql: `SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders
           WHERE ${conditions.join(" AND ")}
           ORDER BY created_at DESC`,
     args,
@@ -203,7 +206,7 @@ export async function fetchOrdersBySeller(
 
 export async function getOrder(id: string): Promise<Order | null> {
   const res = await db.execute({
-    sql: "SELECT * FROM orders WHERE id = ?",
+    sql: "SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE id = ?",
     args: [id],
   });
   if (res.rows.length === 0) return null;
@@ -311,14 +314,28 @@ export async function updateOrder(
 
   if (updates.length === 0) return;
   args.push(id);
-  await db.execute({
-    sql: `UPDATE orders SET ${updates.join(", ")} WHERE id = ?`,
-    args,
-  });
+  const commercial = patch.items !== undefined || patch.total !== undefined || patch.buyer_details !== undefined;
+  const transaction = await db.transaction("write");
+  try {
+    const result = await transaction.execute({
+      sql: `UPDATE orders SET ${updates.join(", ")} WHERE id = ? ${commercial ? "AND status = 'PENDING_PAYMENT' AND odoo_sent_at IS NULL AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)" : ""}`,
+      args,
+    });
+    if (!result.rowsAffected) throw new Error("Pedido inexistente o datos comerciales bloqueados por cobro/exportación.");
+    if (patch.status === "COMPLETED") {
+      const row = (await transaction.execute({sql:"SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE id = ?",args:[id]})).rows[0];
+      if (!row.odoo_sent_at && row.status !== "ODOO_SENT") {
+        const snapshot = await snapshotOrder(transaction, rowToOrder(row as unknown as OrderRow));
+        await transaction.execute({sql:"INSERT OR IGNORE INTO odoo_exports (order_id,snapshot) VALUES (?,?)",args:[id,JSON.stringify(snapshot)]});
+      }
+    }
+    await transaction.commit();
+  } finally { transaction.close(); }
 }
 
 export async function deleteOrder(id: string): Promise<void> {
-  await db.execute({ sql: "DELETE FROM orders WHERE id = ?", args: [id] });
+  const result = await db.execute({ sql: "DELETE FROM orders WHERE id = ? AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)", args: [id] });
+  if (!result.rowsAffected) throw new Error("No se puede eliminar un pedido con historial de exportación Odoo.");
 }
 
 export async function fetchOrdersForOdoo(options: {
@@ -335,6 +352,7 @@ export async function fetchOrdersForOdoo(options: {
       ? `status IN (${CLOSED_SALE_SQL})`
       : `status IN (${ODOO_QUEUE_STATUSES.map((s) => `'${s}'`).join(", ")})`,
   ];
+  if (!options.includeSent) conditions.push("NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id AND status = 'exported')");
   const args: (string | number)[] = [];
 
   const byEvent = eventCondition(options.event);
@@ -352,7 +370,7 @@ export async function fetchOrdersForOdoo(options: {
   }
 
   const res = await db.execute({
-    sql: `SELECT * FROM orders WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
+    sql: `SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
     args,
   });
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
@@ -394,14 +412,14 @@ export async function setOdooResult(ids: string[], result: OdooResult): Promise<
     await db.execute({
       sql: `UPDATE orders
             SET status = 'ODOO_SENT', odoo_sent_at = ?, odoo_ref = ?, odoo_error = NULL
-            WHERE id IN (${placeholders}) AND status IN (${queue})`,
+            WHERE id IN (${placeholders}) AND status IN (${queue}) AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
       args: [new Date().toISOString(), result.ref ?? null, ...ids],
     });
   } else {
     await db.execute({
       sql: `UPDATE orders
             SET status = 'ODOO_ERROR', odoo_error = ?
-            WHERE id IN (${placeholders}) AND status IN (${queue})`,
+            WHERE id IN (${placeholders}) AND status IN (${queue}) AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
       args: [result.error, ...ids],
     });
   }
@@ -414,7 +432,7 @@ export async function resetOdooSent(ids: string[]): Promise<void> {
   await db.execute({
     sql: `UPDATE orders
           SET status = 'COMPLETED', odoo_sent_at = NULL, odoo_ref = NULL, odoo_error = NULL
-          WHERE id IN (${placeholders}) AND status = 'ODOO_SENT'`,
+          WHERE id IN (${placeholders}) AND status = 'ODOO_SENT' AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
     args: ids,
   });
 }

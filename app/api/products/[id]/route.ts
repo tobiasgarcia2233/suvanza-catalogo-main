@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { OdooError } from "@/lib/odooClient";
 import { getProduct } from "@/lib/productQueries";
 import { deleteProduct, updateProduct } from "@/lib/productMutations";
 import { readSessionFromCookie } from "@/lib/auth";
@@ -28,6 +29,7 @@ export async function PATCH(
     revalidateCatalog();
     return NextResponse.json({ message: "updated" });
   } catch (err) {
+    if (err instanceof OdooError) return NextResponse.json({ message: err.message }, { status: err.status });
     return NextResponse.json(
       { message: err instanceof Error ? err.message : "Error" },
       { status: 500 },
