@@ -1,4 +1,5 @@
 "use client";
+import { OdooExportStatus } from "@/components/OdooExportStatus";
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
@@ -14,7 +15,6 @@ import {
   Send,
   StickyNote,
   TriangleAlert,
-  Undo2,
 } from "lucide-react";
 
 export default function OdooPageClient({
@@ -41,7 +41,7 @@ export default function OdooPageClient({
   const [localEnd, setLocalEnd] = useState(endDate);
 
   const selectableIds = useMemo(
-    () => orders.filter((o) => o.status !== "ODOO_SENT").map((o) => o.id),
+    () => orders.filter((o) => o.status !== "ODOO_SENT" && o.odoo_export_status !== "exported").map((o) => o.id),
     [orders],
   );
   const allSelected =
@@ -91,11 +91,12 @@ export default function OdooPageClient({
           transferred,
         }),
       });
-      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "No se pudo exportar.");
       setSelected(new Set());
       startTransition(() => router.refresh());
-    } catch {
-      alert("No se pudo actualizar.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo exportar.");
     } finally {
       setBusy(false);
     }
@@ -113,7 +114,7 @@ export default function OdooPageClient({
           </Link>
           <h1 className="font-bold text-3xl mt-1">Pasar a Odoo</h1>
           <p className="text-sm text-gray-500">
-            Ventas cobradas listas para transcribir a Odoo. Marcá las que ya pasaste.
+            Ventas cobradas: revisá sus presupuestos, clientes pendientes y errores de exportación.
           </p>
         </div>
 
@@ -184,17 +185,9 @@ export default function OdooPageClient({
                 className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Marcar como pasadas a Odoo
+                Exportar / reintentar en Odoo
               </button>
-              {includeTransferred && (
-                <button
-                  onClick={() => bulkMark(false)}
-                  disabled={busy || isPending}
-                  className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <Undo2 size={14} /> Deshacer
-                </button>
-              )}
+
             </>
           )}
         </div>
@@ -242,7 +235,7 @@ function OrderCard({
   eventName: string;
 }) {
   // The page only lists paid orders (see fetchOrdersForOdoo).
-  const isTransferred = order.status === "ODOO_SENT";
+  const isTransferred = order.status === "ODOO_SENT" || order.odoo_export_status === "exported";
   const hasOdooError = order.status === "ODOO_ERROR";
   const created = new Date(order.created_at);
   const dateStr = created.toLocaleDateString("es-AR", {
@@ -312,6 +305,8 @@ function OrderCard({
             </div>
           </div>
         </div>
+
+        <OdooExportStatus orderId={order.id} legacySent={order.status === "ODOO_SENT" || !!order.odoo_sent_at} />
 
         {hasOdooError && order.odoo_error && (
           <div className="mb-3 flex items-start gap-2 rounded-md bg-red-50 border border-red-100 px-3 py-1.5 text-sm text-red-900">

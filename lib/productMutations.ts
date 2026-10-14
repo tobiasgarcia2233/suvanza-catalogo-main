@@ -1,7 +1,10 @@
 import "server-only";
 import { db } from "./db";
-import type { Product, Variant, PriceTier } from "@/types";
+import type { Variant, PriceTier } from "@/types";
 import { findOrCreateCategory } from "./categoryQueries";
+import { validateOdooLink } from "./odooQueries";
+import { OdooError } from "./odooClient";
+import { getProduct } from "./productQueries";
 
 function slugify(s: string) {
   return s
@@ -13,6 +16,9 @@ function slugify(s: string) {
 
 export type ProductInput = {
   id?: string;
+  /** Only accepted to reject stale parent-level clients; never persisted. */
+  odooProductId?: number | null;
+  resolveLegacyOdooProductId?: number;
   brand?: string | null;
   name: string;
   /** Category names — resolved/created on save. A product can have many. */
@@ -20,29 +26,59 @@ export type ProductInput = {
   position?: number;
   imageUrls?: string[];
   priceTiers?: PriceTier[];
-  variants?: Variant[];
+  variants?: (Variant & { originalId?: string })[];
   promotionIds?: string[];
 };
 
+async function prepareVariants(input: ProductInput, previous: Variant[]) {
+  if (input.odooProductId != null) {
+    throw new OdooError("El vínculo con Odoo pertenece a cada variante. Recargá el formulario.", 400);
+  }
+  const variants = input.variants ?? previous;
+  if (!Array.isArray(variants)) throw new OdooError("Las variantes no son válidas.", 400);
+  const used = new Set<string>();
+  const ids = new Set<string>();
+  const result: Variant[] = [];
+  for (const v of variants) {
+    if (!v || typeof v.id !== "string" || typeof v.name !== "string") {
+      throw new OdooError("Revisá el nombre y el ID local de cada variante.", 400);
+    }
+    const source = "originalId" in v ? v.originalId : v.id.trim();
+    if (source !== undefined && typeof source !== "string") throw new OdooError("Identidad de variante inválida.", 400);
+    const saved = previous.find((old) => old.id === source);
+    if (("originalId" in v && source && !saved) || (saved && used.has(saved.id))) {
+      throw new OdooError("La variante original no existe o está duplicada. Recargá el formulario.", 400);
+    }
+    if (saved) used.add(saved.id);
+    const localId = v.id.trim();
+    if (localId && ids.has(localId)) throw new OdooError("Los IDs locales de variantes no pueden repetirse.", 400);
+    if (localId) ids.add(localId);
+    // Match by persisted identity, never by array position or submitted Odoo ID.
+    const odooProductId = await validateOdooLink(v.odooProductId, saved?.odooProductId ?? null);
+    result.push({ ...v, id: localId, odooProductId });
+  }
+  return result;
+}
+
 export async function createProduct(input: ProductInput): Promise<string> {
-  const id =
-    input.id?.trim() || `${slugify(input.name)}-${Date.now().toString(36)}`;
-  await persistProduct(id, input, false);
+  const variants = await prepareVariants(input, []);
+  if (input.resolveLegacyOdooProductId !== undefined) throw new OdooError("No hay un vínculo anterior para asignar.", 400);
+  const id = input.id?.trim() || `${slugify(input.name)}-${Date.now().toString(36)}`;
+  await persistProduct(id, { ...input, variants }, false);
   return id;
 }
 
-export async function updateProduct(
-  id: string,
-  input: ProductInput,
-): Promise<void> {
-  const existing = await db.execute({
-    sql: "SELECT id FROM products WHERE id = ?",
-    args: [id],
-  });
-  if (existing.rows.length === 0) {
-    throw new Error("Product not found");
+export async function updateProduct(id: string, input: ProductInput): Promise<void> {
+  const existing = await getProduct(id);
+  if (!existing) throw new Error("Product not found");
+  const variants = await prepareVariants(input, existing.variants ?? []);
+  if (input.resolveLegacyOdooProductId !== undefined) {
+    if (!existing.legacyOdooProductId || input.resolveLegacyOdooProductId !== existing.legacyOdooProductId ||
+        !variants.some((v) => v.odooProductId === existing.legacyOdooProductId)) {
+      throw new OdooError("Para resolver el vínculo anterior, asigná su ID a una variante y guardá nuevamente.", 400);
+    }
   }
-  await persistProduct(id, input, true);
+  await persistProduct(id, { ...input, variants }, true);
 }
 
 async function persistProduct(
@@ -60,88 +96,97 @@ async function persistProduct(
     categoryIds.push((await findOrCreateCategory(name)).id);
   }
 
-  if (isUpdate) {
-    await db.execute({
-      sql: `UPDATE products SET brand=?, name=?, position=?, updated_at=? WHERE id=?`,
-      args: [input.brand ?? null, input.name, input.position ?? 0, now, id],
-    });
-    // Cascading children — wipe and reinsert
-    await db.batch(
-      [
-        { sql: "DELETE FROM product_images WHERE product_id = ?", args: [id] },
-        { sql: "DELETE FROM price_tiers WHERE product_id = ?", args: [id] },
-        { sql: "DELETE FROM variants WHERE product_id = ?", args: [id] },
-        { sql: "DELETE FROM product_promotions WHERE product_id = ?", args: [id] },
-        { sql: "DELETE FROM product_categories WHERE product_id = ?", args: [id] },
-      ],
-      "write",
-    );
-  } else {
-    await db.execute({
-      sql: `INSERT INTO products (id, brand, name, position) VALUES (?, ?, ?, ?)`,
-      args: [id, input.brand ?? null, input.name, input.position ?? 0],
-    });
-  }
-
-  for (const categoryId of categoryIds) {
-    await db.execute({
-      sql: `INSERT OR IGNORE INTO product_categories (product_id, category_id) VALUES (?, ?)`,
-      args: [id, categoryId],
-    });
-  }
-
-  // Top-level images
-  const imageUrls = input.imageUrls ?? [];
-  for (let i = 0; i < imageUrls.length; i++) {
-    await db.execute({
-      sql: `INSERT INTO product_images (product_id, variant_id, url, position) VALUES (?, NULL, ?, ?)`,
-      args: [id, imageUrls[i], i],
-    });
-  }
-
-  // Top-level price tiers
-  const topTiers = input.priceTiers ?? [];
-  for (let i = 0; i < topTiers.length; i++) {
-    const t = topTiers[i];
-    await db.execute({
-      sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position) VALUES (?, NULL, ?, ?, ?)`,
-      args: [id, t.minQuantity, t.pricePerUnit, i],
-    });
-  }
-
-  // Variants with their images + tiers
-  const variants = input.variants ?? [];
-  for (let vi = 0; vi < variants.length; vi++) {
-    const v = variants[vi];
-    const vid = v.id?.trim() || `${id}-var-${vi + 1}-${Date.now().toString(36)}`;
-    await db.execute({
-      sql: `INSERT INTO variants (id, product_id, name, position) VALUES (?, ?, ?, ?)`,
-      args: [vid, id, v.name, vi],
-    });
-    const imgs = v.imageUrls ?? [];
-    for (let i = 0; i < imgs.length; i++) {
-      await db.execute({
-        sql: `INSERT INTO product_images (product_id, variant_id, url, position) VALUES (?, ?, ?, ?)`,
-        args: [id, vid, imgs[i], i],
+  const tx = await db.transaction("write");
+  try {
+    if (isUpdate) {
+      await tx.execute({
+        sql: `UPDATE products SET brand=?, name=?, position=?, updated_at=?,
+          odoo_product_id=CASE WHEN odoo_product_id=? THEN NULL ELSE odoo_product_id END WHERE id=?`,
+        args: [input.brand ?? null, input.name, input.position ?? 0, now, input.resolveLegacyOdooProductId ?? null, id],
+      });
+      // Cascading children — wipe and reinsert
+      await tx.batch(
+        [
+          { sql: "DELETE FROM product_images WHERE product_id = ?", args: [id] },
+          { sql: "DELETE FROM price_tiers WHERE product_id = ?", args: [id] },
+          { sql: "DELETE FROM variants WHERE product_id = ?", args: [id] },
+          { sql: "DELETE FROM product_promotions WHERE product_id = ?", args: [id] },
+          { sql: "DELETE FROM product_categories WHERE product_id = ?", args: [id] },
+        ],
+      );
+    } else {
+      await tx.execute({
+        sql: `INSERT INTO products (id, brand, name, position, odoo_product_id) VALUES (?, ?, ?, ?, ?)`,
+        args: [id, input.brand ?? null, input.name, input.position ?? 0, null],
       });
     }
-    const tiers = v.priceTiers ?? [];
-    for (let i = 0; i < tiers.length; i++) {
-      const t = tiers[i];
-      await db.execute({
-        sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position) VALUES (?, ?, ?, ?, ?)`,
-        args: [id, vid, t.minQuantity, t.pricePerUnit, i],
+
+    for (const categoryId of categoryIds) {
+      await tx.execute({
+        sql: `INSERT OR IGNORE INTO product_categories (product_id, category_id) VALUES (?, ?)`,
+        args: [id, categoryId],
       });
     }
-  }
 
-  // Promotion links
-  const promotionIds = input.promotionIds ?? [];
-  for (const pid of promotionIds) {
-    await db.execute({
-      sql: `INSERT OR IGNORE INTO product_promotions (product_id, promotion_id) VALUES (?, ?)`,
-      args: [id, pid],
-    });
+    // Top-level images
+    const imageUrls = input.imageUrls ?? [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      await tx.execute({
+        sql: `INSERT INTO product_images (product_id, variant_id, url, position) VALUES (?, NULL, ?, ?)`,
+        args: [id, imageUrls[i], i],
+      });
+    }
+
+    // Top-level price tiers
+    const topTiers = input.priceTiers ?? [];
+    for (let i = 0; i < topTiers.length; i++) {
+      const t = topTiers[i];
+      await tx.execute({
+        sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position) VALUES (?, NULL, ?, ?, ?)`,
+        args: [id, t.minQuantity, t.pricePerUnit, i],
+      });
+    }
+
+    // Variants with their images + tiers
+    const variants = input.variants ?? [];
+    for (let vi = 0; vi < variants.length; vi++) {
+      const v = variants[vi];
+      const vid = v.id?.trim() || `${id}-var-${vi + 1}-${Date.now().toString(36)}`;
+      await tx.execute({
+        sql: `INSERT INTO variants (id, product_id, name, position, odoo_product_id) VALUES (?, ?, ?, ?, ?)`,
+        args: [vid, id, v.name, vi, v.odooProductId ?? null],
+      });
+      const imgs = v.imageUrls ?? [];
+      for (let i = 0; i < imgs.length; i++) {
+        await tx.execute({
+          sql: `INSERT INTO product_images (product_id, variant_id, url, position) VALUES (?, ?, ?, ?)`,
+          args: [id, vid, imgs[i], i],
+        });
+      }
+      const tiers = v.priceTiers ?? [];
+      for (let i = 0; i < tiers.length; i++) {
+        const t = tiers[i];
+        await tx.execute({
+          sql: `INSERT INTO price_tiers (product_id, variant_id, min_quantity, price_per_unit, position) VALUES (?, ?, ?, ?, ?)`,
+          args: [id, vid, t.minQuantity, t.pricePerUnit, i],
+        });
+      }
+    }
+
+    // Promotion links
+    const promotionIds = input.promotionIds ?? [];
+    for (const pid of promotionIds) {
+      await tx.execute({
+        sql: `INSERT OR IGNORE INTO product_promotions (product_id, promotion_id) VALUES (?, ?)`,
+        args: [id, pid],
+      });
+    }
+    await tx.commit();
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    tx.close();
   }
 }
 

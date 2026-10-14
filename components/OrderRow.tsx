@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useUIStore } from "@/store/uiStore";
+import { OdooExportStatus } from "./OdooExportStatus";
 import NotesModal from "./NotesModal";
 import PaymentMethodModal from "./PaymentMethodModal";
 import PrintOrderModal from "./PrintOrderModal";
@@ -364,6 +365,8 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
         </div>
         </div>
       </div>
+
+      {isCompleted && <OdooExportStatus orderId={order.id} legacySent={!!order.odoo_sent_at || order.status === "ODOO_SENT"} />}
 
       {itemsOpen && (
         <div className="border-t border-border bg-background/40 px-4 py-4">

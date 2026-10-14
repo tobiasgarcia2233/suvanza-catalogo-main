@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteOrder, updateOrder, getOrder } from "@/lib/orderQueries";
 import { getSellerBySlug } from "@/lib/sellerQueries";
 import { readSessionFromCookie } from "@/lib/auth";
+import { exportPaidOrder } from "@/lib/odooExport";
 import { isOrderLocked } from "@/types";
 import { assertSellerEventOrder, EventOrderError } from "@/lib/eventQueries";
 
@@ -14,8 +15,7 @@ interface CartLine {
   discountPercentage: number;
 }
 
-// Statuses the admin may set by hand. Odoo statuses only change through
-// setOdooResult (bulk-transfer today, the Odoo integration later).
+// Local payment statuses only. Export progress is persisted separately.
 const ADMIN_SETTABLE_STATUSES = new Set(["PENDING_PAYMENT", "COMPLETED"]);
 
 export async function GET(
@@ -154,7 +154,8 @@ export async function PATCH(
     }
 
     await updateOrder(orderId, patch);
-    return NextResponse.json({ message: "Order updated" });
+    const odooExport = patch.status === "COMPLETED" ? await exportPaidOrder(orderId) : undefined;
+    return NextResponse.json({ message: "Order updated", odooExport });
   } catch (error) {
     if (error instanceof EventOrderError) {
       return NextResponse.json({ message: error.message }, { status: error.status });

@@ -1,47 +1,41 @@
 "use client";
 
 import { useState } from "react";
+import { variantFormState, serializeVariants, moveVariant, type VariantFormState } from "@/lib/variantFormState";
 import { useRouter } from "next/navigation";
 import type { Product, Variant, CrossPromotion, Category } from "@/types";
 import ImageUpload from "./ImageUpload";
 import PriceTiersEditor from "./PriceTiersEditor";
 import SearchBox from "./SearchBox";
 import Combobox from "./Combobox";
+import OdooProductSelector from "./OdooProductSelector";
 import CategoryManager from "./CategoryManager";
 import { Plus, Trash2, Loader2, X } from "lucide-react";
 import { useMemo } from "react";
 
-function emptyVariant(): Variant {
-  return { id: "", name: "", imageUrls: [], priceTiers: [] };
-}
-
 type FormState = {
   id: string;
+  legacyVariantKey: string | null;
   brand: string;
   name: string;
   categories: string[];
   imageUrls: string[];
   priceTiers: Product["priceTiers"];
-  variants: Variant[];
+  variants: VariantFormState[];
   promotionIds: string[];
 };
 
 function initial(product?: Product): FormState {
-  const variants =
-    product?.variants?.map((v) => ({
-      id: v.id,
-      name: v.name,
-      imageUrls: v.imageUrls ?? [],
-      priceTiers: v.priceTiers ?? [],
-    })) ?? [];
+  const variants = product?.variants?.map(variantFormState) ?? [];
   return {
     id: product ? String(product.id) : "",
+    legacyVariantKey: null,
     brand: product?.brand ?? "",
     name: product?.name ?? "",
     categories: product?.categoryNames ?? [],
     imageUrls: product?.imageUrls ?? [],
     priceTiers: product?.priceTiers ?? [],
-    variants: variants.length > 0 ? variants : [emptyVariant()],
+    variants: variants.length > 0 ? variants : [variantFormState()],
     promotionIds: (product?.crossProductPromotions ?? []).map((p) => p.id),
   };
 }
@@ -57,7 +51,7 @@ export default function ProductForm({
 }) {
   const router = useRouter();
   const isEdit = !!product;
-  const [state, setState] = useState<FormState>(initial(product));
+  const [state, setState] = useState<FormState>(() => initial(product));
   const [cats, setCats] = useState<Category[]>(categories);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,19 +85,19 @@ export default function ProductForm({
     setState((s) => ({ ...s, [key]: val }));
   }
 
-  function updateVariant(i: number, patch: Partial<Variant>) {
+  function updateVariant(key: string, patch: Partial<Variant>) {
     setState((s) => ({
       ...s,
-      variants: s.variants.map((v, idx) => (idx === i ? { ...v, ...patch } : v)),
+      variants: s.variants.map((v) => (v.formKey === key ? { ...v, ...patch } : v)),
     }));
   }
   function addVariant() {
-    setState((s) => ({ ...s, variants: [...s.variants, emptyVariant()] }));
+    setState((s) => ({ ...s, variants: [...s.variants, variantFormState()] }));
   }
-  function removeVariant(i: number) {
+  function removeVariant(key: string) {
     setState((s) => {
       if (s.variants.length <= 1) return s;
-      return { ...s, variants: s.variants.filter((_, idx) => idx !== i) };
+      return { ...s, variants: s.variants.filter((v) => v.formKey !== key) };
     });
   }
   function addCategory(name: string) {
@@ -137,12 +131,14 @@ export default function ProductForm({
     try {
       const payload = {
         id: state.id || undefined,
+        resolveLegacyOdooProductId: state.variants.some((v) => v.formKey === state.legacyVariantKey && v.odooProductId === product?.legacyOdooProductId)
+          ? product?.legacyOdooProductId : undefined,
         brand: state.brand.trim() || null,
         name: state.name.trim(),
         categories: state.categories,
         imageUrls: state.imageUrls,
         priceTiers: state.priceTiers,
-        variants: state.variants,
+        variants: serializeVariants(state.variants),
         promotionIds: state.promotionIds,
       };
       const res = await fetch(
@@ -289,12 +285,20 @@ export default function ProductForm({
             <Plus size={14} /> Agregar variante
           </button>
         </div>
+        {product?.legacyOdooProductId != null && (
+          <div role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>Referencia anterior pendiente: ID {product.legacyOdooProductId} de Odoo.
+              Se conserva en el producto hasta que la asignes explícitamente a una variante y guardes.</p>
+            <p>Si no había variantes, completá una para asignarla. Si ya tiene otro vínculo, revisá cuál corresponde antes de reemplazarlo.</p>
+            {state.legacyVariantKey && <p>Asignación preparada; se confirmará al guardar si la variante conserva ese ID.</p>}
+          </div>
+        )}
         {state.variants.map((v, i) => {
           const canRemove = state.variants.length > 1;
           return (
             <div
-              key={i}
-              className="border border-gray-200 rounded-md p-4 flex flex-col gap-3"
+              key={v.formKey}
+              className="border border-gray-400 rounded-md p-4 flex flex-col gap-3"
             >
               <div className="flex items-start gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
@@ -303,7 +307,7 @@ export default function ProductForm({
                     <input
                       value={v.name}
                       onChange={(e) =>
-                        updateVariant(i, { name: e.target.value })
+                        updateVariant(v.formKey, { name: e.target.value })
                       }
                       className="rounded border border-gray-300 px-3 py-2"
                     />
@@ -314,14 +318,14 @@ export default function ProductForm({
                     </span>
                     <input
                       value={v.id}
-                      onChange={(e) => updateVariant(i, { id: e.target.value })}
+                      onChange={(e) => updateVariant(v.formKey, { id: e.target.value })}
                       className="rounded border border-gray-300 px-3 py-2"
                     />
                   </label>
                 </div>
                 <button
                   type="button"
-                  onClick={() => removeVariant(i)}
+                  onClick={() => removeVariant(v.formKey)}
                   disabled={!canRemove}
                   title={
                     canRemove
@@ -333,11 +337,31 @@ export default function ProductForm({
                   <Trash2 size={16} />
                 </button>
               </div>
+              <div className="flex gap-3 text-sm">
+                <button type="button" disabled={busy || i === 0} className="underline disabled:opacity-40"
+                  onClick={() => setState((s) => ({ ...s, variants: moveVariant(s.variants, v.formKey, -1) }))}>Subir variante</button>
+                <button type="button" disabled={busy || i === state.variants.length - 1} className="underline disabled:opacity-40"
+                  onClick={() => setState((s) => ({ ...s, variants: moveVariant(s.variants, v.formKey, 1) }))}>Bajar variante</button>
+              </div>
+              <div className="rounded border border-gray-200 p-3 flex flex-col gap-3">
+                <h3 className="font-semibold text-sm">Vínculo con Odoo (opcional)</h3>
+                <OdooProductSelector value={v.odooProductId ?? null}
+                  onChange={(id) => updateVariant(v.formKey, { odooProductId: id })} disabled={busy} />
+                {product?.legacyOdooProductId != null && (
+                  <button type="button" disabled={busy} className="text-left text-sm underline"
+                    onClick={() => setState((s) => ({ ...s, legacyVariantKey: v.formKey,
+                      variants: s.variants.map((row) => row.formKey === v.formKey
+                        ? { ...row, odooProductId: product.legacyOdooProductId } : row) }))}>
+                    Asignar referencia anterior (ID {product.legacyOdooProductId}) a esta variante
+                    {v.odooProductId != null && v.odooProductId !== product.legacyOdooProductId ? ` — reemplaza ID ${v.odooProductId}` : ""}
+                  </button>
+                )}
+              </div>
               <div>
                 <p className="text-xs text-gray-600 mb-2">Imágenes</p>
                 <ImageUpload
                   value={v.imageUrls ?? []}
-                  onChange={(urls) => updateVariant(i, { imageUrls: urls })}
+                  onChange={(urls) => updateVariant(v.formKey, { imageUrls: urls })}
                   folder={`suvanza/products/${state.id || "new"}/${v.id || `var-${i + 1}`}`}
                 />
               </div>
@@ -345,7 +369,7 @@ export default function ProductForm({
                 <p className="text-xs text-gray-600 mb-2">Precios</p>
                 <PriceTiersEditor
                   value={v.priceTiers ?? []}
-                  onChange={(tiers) => updateVariant(i, { priceTiers: tiers })}
+                  onChange={(tiers) => updateVariant(v.formKey, { priceTiers: tiers })}
                 />
               </div>
             </div>

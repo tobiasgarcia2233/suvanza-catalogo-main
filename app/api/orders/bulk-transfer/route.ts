@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { resetOdooSent, setOdooResult } from "@/lib/orderQueries";
+import { exportPaidOrder } from "@/lib/odooExport";
 import { readSessionFromCookie } from "@/lib/auth";
 
-// Manual Odoo flow: the admin transcribes paid orders into Odoo and marks them
-// here as sent (or undoes the mark). Only paid orders are affected.
+// Existing dashboard now runs the same durable export as payment/retry.
 export async function POST(request: Request) {
   const session = await readSessionFromCookie();
   if (!session) {
@@ -14,9 +13,11 @@ export async function POST(request: Request) {
     if (!Array.isArray(ids) || ids.some((x) => typeof x !== "string")) {
       return NextResponse.json({ message: "ids inválidos" }, { status: 400 });
     }
-    if (transferred) await setOdooResult(ids, { ok: true });
-    else await resetOdooSent(ids);
-    return NextResponse.json({ message: "ok", count: ids.length });
+    if (!transferred) return NextResponse.json({message:"No se puede deshacer una exportación. Revisá el presupuesto en Odoo."},{status:409});
+    if (ids.length > 20) return NextResponse.json({message:"Exportá hasta 20 pedidos por vez."},{status:400});
+    const results = [];
+    for (const id of ids) results.push({id, export:await exportPaidOrder(id)});
+    return NextResponse.json({ message: "ok", count: ids.length, results });
   } catch (err) {
     console.error("bulk-transfer error:", err);
     return NextResponse.json(
