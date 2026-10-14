@@ -6,12 +6,25 @@ import { isClosedSale, type Order } from "@/types";
 import { OrderRow } from "./OrderRow";
 import { ChevronDown, Search, X } from "lucide-react";
 import { isRefreshPaused } from "@/store/refreshGuardStore";
+import type { EventOption } from "@/lib/eventQueries";
+import { EventFilterSelect } from "./EventFilterSelect";
 
 interface SearchableOrderListProps {
   initialOrders: Order[];
+  events: EventOption[];
 }
 
-export function SearchableOrderList({ initialOrders }: SearchableOrderListProps) {
+const STATUS_OPTIONS = [
+  { value: "", label: "Todos los estados" },
+  { value: "pending", label: "Pendiente de pago" },
+  { value: "paid", label: "Cobrados" },
+  { value: "odoo_error", label: "Error Odoo" },
+];
+
+const selectClass =
+  "bg-surface px-4 py-3 border border-border focus:border-brand rounded-lg focus:ring-brand text-base";
+
+export function SearchableOrderList({ initialOrders, events }: SearchableOrderListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -20,6 +33,24 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
   const [startDate, setStartDate] = useState(searchParams.get("startDate") || "");
   const [endDate, setEndDate] = useState(searchParams.get("endDate") || "");
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  const eventFilter = searchParams.get("event") || "";
+  const statusFilter = searchParams.get("status") || "";
+  const eventNames = useMemo(
+    () => new Map(events.map((e) => [e.id, e.name])),
+    [events],
+  );
+
+  // Dropdowns apply right away (no "Filtrar" needed); text and dates still
+  // wait for Enter / the button.
+  const setParam = (key: string, value: string) => {
+    startTransition(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (value) params.set(key, value);
+      else params.delete(key);
+      router.push(`/orders?${params.toString()}`);
+    });
+  };
 
   // Instead of blindly re-rendering the whole page every few seconds, poll a
   // tiny endpoint and only refresh when it reports that orders actually
@@ -100,6 +131,8 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
     if (searchParams.get("startDate") && searchParams.get("endDate")) {
       return `del ${searchParams.get("startDate")} al ${searchParams.get("endDate")}`;
     }
+    // An event without dates lists all of its orders (see fetchRecentOrders).
+    if (eventFilter && eventFilter !== "individual") return "todo el evento";
     return "últimas 24 hs";
   })();
 
@@ -162,6 +195,27 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
             </div>
           </div>
         )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <EventFilterSelect
+          events={events}
+          value={eventFilter}
+          onChange={(v) => setParam("event", v)}
+          className={selectClass}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setParam("status", e.target.value)}
+          aria-label="Filtrar por estado"
+          className={selectClass}
+        >
+          {STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex sm:flex-row flex-col gap-4 mb-6">
@@ -235,7 +289,7 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
                   COMPRADOR
                 </div>
                 <div className="font-semibold text-text-secondary text-sm">
-                  VENDEDOR
+                  ATENDIÓ
                 </div>
                 <div className="font-semibold text-text-secondary text-sm">
                   FECHA
@@ -252,13 +306,21 @@ export function SearchableOrderList({ initialOrders }: SearchableOrderListProps)
               </div>
             </div>
             {initialOrders.map((order) => (
-              <OrderRow key={order.id} order={order} />
+              <OrderRow
+                key={order.id}
+                order={order}
+                eventName={
+                  order.event_id
+                    ? eventNames.get(order.event_id) ?? "Evento eliminado"
+                    : "Venta individual"
+                }
+              />
             ))}
           </div>
         ) : (
           <div className="flex justify-center items-center bg-surface border-2 border-border border-dashed rounded-lg h-64">
             <p className="text-text-secondary">
-              {searchQuery || startDate || endDate
+              {searchQuery || startDate || endDate || eventFilter || statusFilter
                 ? "No se encontraron pedidos para los filtros aplicados."
                 : "No hay pedidos recientes."}
             </p>

@@ -124,8 +124,8 @@ export default function EventForm({
     openConfirmationModal({
       title: closing ? "Cerrar evento" : "Reabrir evento",
       message: closing
-        ? `¿Cerrar "${event.name}"? Las vendedoras ya no van a poder cargar ni editar ventas en este evento.`
-        : `¿Reabrir "${event.name}"? Las vendedoras van a poder volver a vender en este evento.`,
+        ? `¿Cerrar "${event.name}"? Ya no se van a poder cargar ni editar ventas en este evento.`
+        : `¿Reabrir "${event.name}"? Se va a poder volver a vender en este evento.`,
       onConfirm: async () => {
         setBusy(true);
         setError(null);
@@ -186,7 +186,7 @@ export default function EventForm({
             </p>
             <p className="text-gray-600">
               {event!.status === "active"
-                ? "Las vendedoras asignadas pueden cargar ventas."
+                ? "Se pueden cargar ventas desde los links del equipo asignado."
                 : `Cerrado el ${new Date(event!.closed_at ?? "").toLocaleDateString("es-AR")}. No se pueden cargar ni editar ventas.`}
             </p>
           </div>
@@ -233,7 +233,7 @@ export default function EventForm({
               className="rounded border border-gray-300 px-3 py-2 font-mono text-xs"
             />
             <span className="mt-1 text-xs text-gray-500">
-              Las vendedoras lo ven en <code>/su-link/{slugify(slug) || "…"}</code>
+              Se ve en <code>/link-de-venta/{slugify(slug) || "…"}</code>
             </span>
           </label>
           <label className="flex flex-col text-sm">
@@ -261,11 +261,11 @@ export default function EventForm({
       </section>
 
       <SelectionSection
-        title="Vendedoras"
+        title="Equipo de ventas"
         items={sellers.map((s) => ({ id: s.id, label: s.name, hint: `/${s.slug}` }))}
         selected={state.sellerIds}
         onChange={(ids) => setIds("sellerIds", ids)}
-        searchPlaceholder="Buscar vendedora..."
+        searchPlaceholder="Buscar por nombre..."
       />
 
       <SelectionSection

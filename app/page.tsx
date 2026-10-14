@@ -21,8 +21,8 @@ const links = [
   },
   {
     href: "/admin/sellers",
-    label: "Vendedores",
-    description: "Da de alta vendedores y genera sus links de acceso.",
+    label: "Equipo de ventas",
+    description: "Da de alta al equipo de ventas y genera los links de acceso.",
     icon: Users,
   },
   {
@@ -60,8 +60,8 @@ export default async function Home({
           </h1>
           <p className="mt-5 text-lg text-text-secondary">
             Esta aplicación es el catálogo digital de Suvanza. Reúne en un solo
-            lugar los productos, sus precios y promociones, y permite que cada
-            vendedor arme y envíe sus pedidos de forma simple. El equipo interno
+            lugar los productos, sus precios y promociones, y permite armar y
+            enviar pedidos de forma simple desde un link personal. El equipo interno
             administra el catálogo y traspasa los pedidos a Odoo.
           </p>
         </section>

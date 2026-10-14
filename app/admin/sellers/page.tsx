@@ -16,9 +16,9 @@ export default async function AdminSellersPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold">Vendedores</h1>
+        <h1 className="text-2xl font-bold">Equipo de ventas</h1>
         <p className="text-sm text-gray-500">
-          {sellers.length} vendedor{sellers.length === 1 ? "" : "es"} con acceso.
+          {sellers.length} persona{sellers.length === 1 ? "" : "s"} con acceso.
           Cada uno recibe un link propio para armar y gestionar sus pedidos sin
           necesidad de iniciar sesión.
         </p>

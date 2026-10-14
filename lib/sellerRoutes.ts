@@ -2,7 +2,7 @@
 // both agree on which paths belong to a seller's personal link vs. a reserved,
 // session-gated section of the app.
 //
-//   /[seller]            → her profile (events + "Individual")
+//   /[seller]            → the seller's profile (events + "Individual")
 //   /[seller]/[context]  → a sales context: "individual" or an event slug
 export const RESERVED_TOP_SEGMENTS = new Set([
   "admin",

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { BarChart3, Pencil } from "lucide-react";
 import type { SalesEventSummary } from "@/lib/eventQueries";
 import SearchBox from "./SearchBox";
 
@@ -44,7 +44,7 @@ export default function EventsTable({ events }: { events: SalesEventSummary[] })
               <th className="text-left py-2 px-4">Evento</th>
               <th className="text-left py-2 px-4">Fechas</th>
               <th className="text-left py-2 px-4">Estado</th>
-              <th className="text-right py-2 px-4">Vendedoras</th>
+              <th className="text-right py-2 px-4">Equipo</th>
               <th className="text-right py-2 px-4">Productos</th>
               <th className="text-right py-2 px-4">Promos</th>
               <th className="text-right py-2 px-4">Carros</th>
@@ -80,13 +80,21 @@ export default function EventsTable({ events }: { events: SalesEventSummary[] })
                 <td className="py-2 px-4 text-right tabular-nums whitespace-nowrap">
                   ${e.salesTotal.toLocaleString("es-AR")}
                 </td>
-                <td className="py-2 px-4 text-right">
-                  <Link
-                    href={`/admin/events/${e.id}`}
-                    className="inline-flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
-                  >
-                    <Pencil size={14} /> Editar
-                  </Link>
+                <td className="py-2 px-4">
+                  <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+                    <Link
+                      href={`/admin/events/${e.id}/stats`}
+                      className="inline-flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
+                    >
+                      <BarChart3 size={14} /> Métricas
+                    </Link>
+                    <Link
+                      href={`/admin/events/${e.id}`}
+                      className="inline-flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
+                    >
+                      <Pencil size={14} /> Editar
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

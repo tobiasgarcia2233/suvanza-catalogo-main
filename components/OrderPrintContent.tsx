@@ -35,7 +35,7 @@ export function OrderPrintContent({ order }: { order: Order }) {
         </div>
         <div>
           <h2 className="text-sm uppercase tracking-wide text-gray-500">
-            Vendedor
+            Atendió
           </h2>
           <p className="font-semibold">{order.seller_name}</p>
           <p className="text-sm mt-2">

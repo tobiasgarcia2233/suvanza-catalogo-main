@@ -218,7 +218,7 @@ export async function deleteEvent(id: string): Promise<void> {
   );
 }
 
-/** Events a seller belongs to, open ones first (her profile page). */
+/** Events a seller belongs to, open ones first (the seller's profile page). */
 export async function getEventsForSeller(sellerId: string): Promise<SalesEvent[]> {
   const res = await db.execute({
     sql: `SELECT e.* FROM events e
@@ -263,7 +263,7 @@ export async function assertSellerEventOrder(input: {
   const event = await getEvent(input.eventId);
   if (!event) throw new EventOrderError("Evento no encontrado.", 404);
   if (!event.sellerIds.includes(input.sellerId)) {
-    throw new EventOrderError("No estás asignada a este evento.", 403);
+    throw new EventOrderError("Este link no tiene acceso a este evento.", 403);
   }
   if (event.status !== "active") {
     throw new EventOrderError(
@@ -300,4 +300,23 @@ export async function assertSellerEventOrder(input: {
       );
     }
   }
+}
+
+export interface EventOption {
+  id: string;
+  name: string;
+  status: EventStatus;
+}
+
+/** Lightweight list for filter dropdowns (open events first). */
+export async function getEventOptions(): Promise<EventOption[]> {
+  const res = await db.execute(
+    `SELECT id, name, status FROM events
+     ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, created_at DESC`,
+  );
+  return res.rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    status: r.status as EventStatus,
+  }));
 }

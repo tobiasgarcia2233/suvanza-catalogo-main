@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Order, Product, CrossPromotion } from "@/types";
+import type { EventOption } from "@/lib/eventQueries";
 import { SearchableOrderList } from "@/components/SearchableOrderList";
 import { QuickAddModal } from "@/components/QuickAddModal";
 import { CartFab } from "@/components/CartFab";
@@ -10,9 +11,10 @@ import { Loader2, Plus } from "lucide-react";
 
 interface OrdersPageClientProps {
   initialOrders: Order[];
+  events: EventOption[];
 }
 
-export function OrdersPageClient({ initialOrders }: OrdersPageClientProps) {
+export function OrdersPageClient({ initialOrders, events }: OrdersPageClientProps) {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [promotions, setPromotions] = useState<CrossPromotion[]>([]);
@@ -55,7 +57,7 @@ export function OrdersPageClient({ initialOrders }: OrdersPageClientProps) {
         <p className="mt-1 text-text-secondary">Cobros y gestión de pedidos.</p>
       </div>
 
-      <SearchableOrderList initialOrders={initialOrders} />
+      <SearchableOrderList initialOrders={initialOrders} events={events} />
 
       <button
         onClick={() => setIsQuickAddOpen(true)}

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const seller = await getSellerBySlug(sellerSlug);
   if (!seller) {
-    return NextResponse.json({ message: "Vendedor no encontrado." }, { status: 404 });
+    return NextResponse.json({ message: "Link de ventas no encontrado." }, { status: 404 });
   }
 
   // ?event=individual → orders outside any event; ?event=<id> → that event.
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const seller = await getSellerByName(formattedSellerName);
     if (!seller) {
       return NextResponse.json(
-        { message: "Vendedor no autorizado." },
+        { message: "Este link no tiene acceso para cargar ventas." },
         { status: 403 },
       );
     }

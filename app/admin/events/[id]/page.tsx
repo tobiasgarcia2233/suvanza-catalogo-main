@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { BarChart3, ChevronLeft } from "lucide-react";
 import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
 import { getAllSellers } from "@/lib/sellerQueries";
 import { getEvent } from "@/lib/eventQueries";
@@ -31,8 +31,18 @@ export default async function EditEventPage({
         >
           <ChevronLeft size={14} /> Volver
         </Link>
-        <h1 className="text-2xl font-bold mt-2">Editar evento</h1>
-        <p className="text-sm text-gray-500">{event.name}</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Editar evento</h1>
+            <p className="text-sm text-gray-500">{event.name}</p>
+          </div>
+          <Link
+            href={`/admin/events/${event.id}/stats`}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
+          >
+            <BarChart3 size={14} /> Ver métricas
+          </Link>
+        </div>
       </div>
       <EventForm
         event={event}

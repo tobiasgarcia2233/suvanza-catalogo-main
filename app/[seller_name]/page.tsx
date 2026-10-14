@@ -7,6 +7,7 @@ import {
 } from "@/lib/catalogCache";
 import { getAllSellers } from "@/lib/sellerQueries";
 import { INDIVIDUAL_EVENT_SLUG, type SalesEvent } from "@/lib/eventQueries";
+import { ContextStatsLine, SellerStatsProvider } from "@/components/SellerContextStats";
 
 // ISR: the seller's events come from the cache and are rebuilt on demand when
 // the admin edits an event (revalidateEvents) — plus an hourly safety net.
@@ -38,7 +39,7 @@ function formatRange(start: string | null, end: string | null) {
 }
 
 // The seller's home: pick where to sell — "Individual" (full catalog) or one of
-// her events.
+// their events.
 export default async function SellerProfilePage({
   params,
 }: {
@@ -54,59 +55,64 @@ export default async function SellerProfilePage({
   const closed = events.filter((e) => e.status !== "active");
 
   return (
-    <div className="bg-[url(/images/Suvanza-back.png)] bg-contain bg-repeat bg-center min-h-[100dvh]">
-      <div className="flex flex-col gap-8 mx-auto px-4 sm:px-6 py-8 max-w-3xl">
-        <div>
-          <p className="text-text-secondary text-sm">Hola,</p>
-          <h1 className="font-bold text-text-primary text-3xl">{seller.name}</h1>
-        </div>
+    <SellerStatsProvider sellerSlug={seller.slug}>
+      <div className="bg-[url(/images/Suvanza-back.png)] bg-contain bg-repeat bg-center min-h-[100dvh]">
+        <div className="flex flex-col gap-8 mx-auto px-4 sm:px-6 py-8 max-w-3xl">
+          <div>
+            <p className="text-text-secondary text-sm">Hola,</p>
+            <h1 className="font-bold text-text-primary text-3xl">{seller.name}</h1>
+          </div>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="font-semibold text-text-secondary text-xs uppercase tracking-wide">
-            Eventos abiertos
-          </h2>
-          {open.length === 0 ? (
-            <p className="bg-surface/80 p-4 border border-border border-dashed rounded-xl text-text-secondary text-sm">
-              No tenés eventos abiertos en este momento.
-            </p>
-          ) : (
-            open.map((e) => (
-              <EventCard key={e.id} sellerSlug={seller.slug} event={e} />
-            ))
-          )}
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <h2 className="font-semibold text-text-secondary text-xs uppercase tracking-wide">
-            Fuera de eventos
-          </h2>
-          <Link
-            href={`/${seller.slug}/${INDIVIDUAL_EVENT_SLUG}`}
-            className="flex items-center gap-4 bg-surface hover:shadow-md p-4 border border-border rounded-xl transition"
-          >
-            <ShoppingBag size={24} className="shrink-0 text-brand" />
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold">Venta individual</p>
-              <p className="text-text-secondary text-sm">
-                Catálogo completo, ventas que no pertenecen a ningún evento.
-              </p>
-            </div>
-            <ChevronRight size={20} className="shrink-0 text-text-secondary" />
-          </Link>
-        </section>
-
-        {closed.length > 0 && (
           <section className="flex flex-col gap-3">
             <h2 className="font-semibold text-text-secondary text-xs uppercase tracking-wide">
-              Eventos cerrados
+              Eventos abiertos
             </h2>
-            {closed.map((e) => (
-              <EventCard key={e.id} sellerSlug={seller.slug} event={e} />
-            ))}
+            {open.length === 0 ? (
+              <p className="bg-surface/80 p-4 border border-border border-dashed rounded-xl text-text-secondary text-sm">
+                No tenés eventos abiertos en este momento.
+              </p>
+            ) : (
+              open.map((e) => (
+                <EventCard key={e.id} sellerSlug={seller.slug} event={e} />
+              ))
+            )}
           </section>
-        )}
+
+          <section className="flex flex-col gap-3">
+            <h2 className="font-semibold text-text-secondary text-xs uppercase tracking-wide">
+              Fuera de eventos
+            </h2>
+            <Link
+              href={`/${seller.slug}/${INDIVIDUAL_EVENT_SLUG}`}
+              className="flex items-center gap-4 bg-surface hover:shadow-md p-4 border border-border rounded-xl transition"
+            >
+              <ShoppingBag size={24} className="shrink-0 text-brand" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">Venta individual</p>
+                <p className="text-text-secondary text-sm">
+                  Catálogo completo, ventas que no pertenecen a ningún evento.
+                </p>
+                <p className="mt-1 text-text-secondary text-sm">
+                  <ContextStatsLine context={INDIVIDUAL_EVENT_SLUG} />
+                </p>
+              </div>
+              <ChevronRight size={20} className="shrink-0 text-text-secondary" />
+            </Link>
+          </section>
+
+          {closed.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-semibold text-text-secondary text-xs uppercase tracking-wide">
+                Eventos cerrados
+              </h2>
+              {closed.map((e) => (
+                <EventCard key={e.id} sellerSlug={seller.slug} event={e} />
+              ))}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+    </SellerStatsProvider>
   );
 }
 
@@ -124,6 +130,9 @@ function EventCard({ sellerSlug, event }: { sellerSlug: string; event: SalesEven
         <p className={`font-semibold ${isOpen ? "text-text-primary" : ""}`}>{event.name}</p>
         <p className="text-sm text-text-secondary">
           {[range, isOpen ? "Abierto" : "Cerrado · solo consulta"].filter(Boolean).join(" · ")}
+        </p>
+        <p className="mt-1 text-sm text-text-secondary">
+          <ContextStatsLine context={event.id} />
         </p>
       </div>
       {isOpen ? (

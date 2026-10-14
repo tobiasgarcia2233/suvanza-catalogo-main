@@ -47,7 +47,7 @@ export async function PATCH(
     if (sellerSlug) {
       const seller = await getSellerBySlug(sellerSlug);
       if (!seller) {
-        return NextResponse.json({ message: "Vendedor no encontrado." }, { status: 404 });
+        return NextResponse.json({ message: "Link de ventas no encontrado." }, { status: 404 });
       }
       const existing = await getOrder(orderId);
       if (!existing || existing.seller_name.toLowerCase() !== seller.name.toLowerCase()) {
@@ -181,7 +181,7 @@ export async function DELETE(
       // already been processed by an admin.
       const seller = await getSellerBySlug(sellerSlug);
       if (!seller) {
-        return NextResponse.json({ message: "Vendedor no encontrado." }, { status: 404 });
+        return NextResponse.json({ message: "Link de ventas no encontrado." }, { status: 404 });
       }
       const order = await getOrder(orderId);
       if (!order || order.seller_name.toLowerCase() !== seller.name.toLowerCase()) {
