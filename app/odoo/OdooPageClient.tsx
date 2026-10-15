@@ -1,7 +1,7 @@
 "use client";
 import { OdooExportStatus } from "@/components/OdooExportStatus";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
@@ -40,9 +40,13 @@ export default function OdooPageClient({
   const [localStart, setLocalStart] = useState(startDate);
   const [localEnd, setLocalEnd] = useState(endDate);
 
+  const [retryAllowed,setRetryAllowed] = useState<Record<string,boolean>>({});
+  const onRetryAllowed = useCallback((id:string,allowed:boolean)=>{
+    setRetryAllowed(previous=>previous[id] === allowed ? previous : {...previous,[id]:allowed});
+  },[]);
   const selectableIds = useMemo(
-    () => orders.filter((o) => o.status !== "ODOO_SENT" && o.odoo_export_status !== "exported").map((o) => o.id),
-    [orders],
+    () => orders.filter((o) => retryAllowed[o.id]).map((o) => o.id),
+    [orders,retryAllowed],
   );
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
@@ -87,7 +91,7 @@ export default function OdooPageClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ids: Array.from(selected),
+          ids: Array.from(selected).filter(id=>selectableIds.includes(id)),
           transferred,
         }),
       });
@@ -181,11 +185,11 @@ export default function OdooPageClient({
             <>
               <button
                 onClick={() => bulkMark(true)}
-                disabled={busy || isPending}
+                disabled={busy || isPending || Array.from(selected).some(id=>!selectableIds.includes(id))}
                 className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Exportar / reintentar en Odoo
+                Reintentar exportaciones pendientes
               </button>
 
             </>
@@ -209,6 +213,8 @@ export default function OdooPageClient({
               key={order.id}
               order={order}
               selected={selected.has(order.id)}
+              retryAllowed={!!retryAllowed[order.id]}
+              onRetryAllowed={onRetryAllowed}
               onToggle={() => toggle(order.id)}
               eventName={
                 order.event_id
@@ -228,11 +234,15 @@ function OrderCard({
   selected,
   onToggle,
   eventName,
+  retryAllowed,
+  onRetryAllowed,
 }: {
   order: Order;
   selected: boolean;
   onToggle: () => void;
   eventName: string;
+  retryAllowed: boolean;
+  onRetryAllowed: (id:string,allowed:boolean)=>void;
 }) {
   // The page only lists paid orders (see fetchOrdersForOdoo).
   const isTransferred = order.status === "ODOO_SENT" || order.odoo_export_status === "exported";
@@ -261,7 +271,7 @@ function OrderCard({
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          disabled={isTransferred}
+          disabled={!retryAllowed}
           className="h-4 w-4"
         />
       </div>
@@ -306,7 +316,7 @@ function OrderCard({
           </div>
         </div>
 
-        <OdooExportStatus orderId={order.id} legacySent={order.status === "ODOO_SENT" || !!order.odoo_sent_at} />
+        <OdooExportStatus onRetryAllowed={onRetryAllowed} orderId={order.id} legacySent={order.status === "ODOO_SENT" || !!order.odoo_sent_at} />
 
         {hasOdooError && order.odoo_error && (
           <div className="mb-3 flex items-start gap-2 rounded-md bg-red-50 border border-red-100 px-3 py-1.5 text-sm text-red-900">

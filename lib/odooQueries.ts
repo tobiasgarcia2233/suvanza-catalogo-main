@@ -3,7 +3,9 @@ import { ODOO_COMPANY_ID, OdooError, odooSearchRead } from "./odooClient";
 import type { OdooProduct } from "@/types";
 
 const conditions = () => [
+  "|",
   ["company_id", "=", ODOO_COMPANY_ID],
+  ["company_id", "=", false],
   ["active", "=", true],
   ["sale_ok", "=", true],
 ];
@@ -20,10 +22,10 @@ async function query(domain: unknown[], limit: number): Promise<OdooProduct[]> {
   if (!Array.isArray(records)) throw new OdooError("Odoo devolvió una respuesta inválida. Intentá nuevamente.");
   return records.map((row) => {
     if (!row || !Number.isSafeInteger(row.id) || row.id <= 0 || typeof row.name !== "string" ||
-        !Array.isArray(row.company_id) || row.company_id[0] !== ODOO_COMPANY_ID || typeof row.company_id[1] !== "string") {
+        !(row.company_id === false || (Array.isArray(row.company_id) && row.company_id[0] === ODOO_COMPANY_ID && typeof row.company_id[1] === "string"))) {
       throw new OdooError("Odoo devolvió una respuesta inválida. Intentá nuevamente.");
     }
-    return { id: row.id, name: row.name, companyName: row.company_id[1] };
+    return { id: row.id, name: row.name, companyName: row.company_id === false ? "Visible para todos" : row.company_id[1] };
   });
 }
 
@@ -37,7 +39,7 @@ export async function getOdooProduct(id: number): Promise<OdooProduct> {
   parseOdooProductId(id);
   const records = await query([...conditions(), ["id", "=", id]], 1);
   const product = records.find((record) => record.id === id);
-  if (!product) throw new OdooError("El producto ya no existe en Odoo o no está activo, habilitado para ventas y asignado a SUVANZA. Elegí otro producto o quitá el vínculo.", 422);
+  if (!product) throw new OdooError("El producto ya no existe en Odoo o no está activo, habilitado para ventas y disponible para SUVANZA o visible para todos. Elegí otro producto o quitá el vínculo.", 422);
   return product;
 }
 
