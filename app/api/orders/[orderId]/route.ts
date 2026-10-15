@@ -1,3 +1,4 @@
+import { validatePurchasedItems, validateAllocationManifest } from "@/lib/checkoutPricing";
 import { NextRequest, NextResponse } from "next/server";
 import { OrderActionError } from "@/lib/orderDeletion";
 import { deleteOrder, updateOrder, getOrder, setOrderEvent } from "@/lib/orderQueries";
@@ -12,6 +13,7 @@ interface CartLine {
   brand?: string;
   name: string;
   quantity: number;
+  pricing?: import("@/types").PricingAllocation;
   finalPrice: number | null;
   discountPercentage: number;
 }
@@ -92,8 +94,11 @@ export async function PATCH(
     const patch: Parameters<typeof updateOrder>[1] = {};
 
     if (Array.isArray(body.items) && body.total !== undefined) {
+      validatePurchasedItems(body.items, Number(body.total));
+      if (body.promos?.length || body.items.some((i: {pricing?:unknown})=>i.pricing)) validateAllocationManifest(body.items,body.promos ?? []);
       patch.items = body.items.map((it: CartLine) => ({
         id: String(it.id),
+        pricing: it.pricing,
         brand: it.brand ?? "",
         name: it.name,
         quantity: it.quantity,

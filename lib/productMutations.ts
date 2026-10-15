@@ -1,3 +1,4 @@
+import { validatePromotion } from "./checkoutPricing";
 import "server-only";
 import { db } from "./db";
 import type { Variant, PriceTier } from "@/types";
@@ -239,6 +240,7 @@ async function persistPromotion(
   input: PromotionInput,
   isUpdate: boolean,
 ) {
+  validatePromotion({title:input.title,totalPrice:input.totalPrice,items:input.items.map(i => ({...i,id:i.itemId,name:i.itemName}))});
   if (isUpdate) {
     await db.execute({
       sql: `UPDATE promotions SET title=?, total_price=?, is_promo=?, position=? WHERE id=?`,

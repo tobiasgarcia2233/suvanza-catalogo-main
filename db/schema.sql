@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS odoo_exports (
   status TEXT NOT NULL DEFAULT 'pending',
   snapshot TEXT NOT NULL,
   customer_data TEXT,
+  pricing_data TEXT,
   partner_id INTEGER,
   quotation_id INTEGER UNIQUE,
   quotation_ref TEXT,

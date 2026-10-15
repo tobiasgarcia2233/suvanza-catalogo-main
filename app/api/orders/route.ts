@@ -1,3 +1,4 @@
+import { validatePurchasedItems, validateAllocationManifest } from "@/lib/checkoutPricing";
 import { NextResponse } from "next/server";
 import { createOrder, fetchOrdersBySeller } from "@/lib/orderQueries";
 import { getSellerByName, getSellerBySlug } from "@/lib/sellerQueries";
@@ -71,6 +72,8 @@ export async function POST(request: Request) {
       });
     }
 
+    validatePurchasedItems(body.items, body.total);
+    if (body.promos?.length || body.items.some((i: {pricing?:unknown})=>i.pricing)) validateAllocationManifest(body.items,body.promos ?? []);
     const id = await createOrder({
       status: "PENDING_PAYMENT",
       date: {
@@ -83,7 +86,8 @@ export async function POST(request: Request) {
       total: body.total,
       discounted_amount: body.subtotal - body.total,
       items: body.items.map((item: CartItem) => ({
-        id: item.id,
+        id: String(item.id),
+        pricing: (item as unknown as import("@/types").Order["items"][number]).pricing,
         name: item.name,
         brand: item.brand,
         quantity: item.quantity,

@@ -130,13 +130,13 @@ function buildBundles(loose: CartItem[], promotion: CrossPromotion, count: numbe
     one.forEach((row, j) => row.forEach((take, i) => {
       if (take) repetitions = Math.min(repetitions, Math.floor(allocation[j][i] / take));
     }));
-    const includedItems = loose.flatMap((item, i) => {
-      const quantity = one.reduce((sum, row) => sum + row[i], 0);
-      return quantity ? [{ ...item, quantity }] : [];
-    });
+    const includedItems = one.flatMap((row, j) => row.flatMap((quantity, i) => quantity ? [{
+      ...loose[i], quantity, promotionUnitPrice: promotion.items[j].pricePerUnit,
+    }] : []));
     bundles.push({
       id: `combo:${promotion.id}:${bundles.length}`,
       promoId: promotion.id,
+      promotionTotal: promotion.totalPrice,
       name: promotion.title,
       brand: "Promoción",
       priceTiers: [],
@@ -312,4 +312,41 @@ export function selectionLimits(items: CartItem[], candidates: ComboCandidate[],
     }
     return [id, low];
   }));
+}
+
+/** Recovery must not guess which purchased variants funded a broad requirement.
+ * A nontrivial residual cycle means another feasible allocation exists. The
+ * source represents unused units (extras); every requirement is already full. */
+export function isComboSelectionUnambiguous(items:CartItem[],promotions:CrossPromotion[],quantities:Record<string,number>):boolean {
+  const loose=items.filter(i=>!i.isPromo);
+  const combined:CrossPromotion={id:'recovery',title:'Recuperación',totalPrice:0,isPromo:true,
+    items:promotions.flatMap(p=>p.items.map(row=>({...row,quantity:row.quantity*quantities[p.id]})))};
+  const matrix=allocate(loose,combined,1);
+  if(!matrix)return false;
+  const graph:number[][]=Array.from({length:1+loose.length+combined.items.length},()=>[]);
+  loose.forEach((item,i)=>{
+    const node=1+i;
+    const used=matrix.reduce((sum,row)=>sum+row[i],0);
+    if(used<item.quantity)graph[0].push(node);
+    if(used>0)graph[node].push(0);
+    combined.items.forEach((requirement,j)=>{
+      if(!matchesRequirement(item,requirement))return;
+      const row=1+loose.length+j;
+      if(matrix[j][i]<item.quantity)graph[node].push(row);
+      if(matrix[j][i]>0)graph[row].push(node);
+    });
+  });
+  // For each residual edge, find a return path while excluding its immediate
+  // reverse. A longer return path is a genuine alternative assignment. Bounded
+  // breadth-first searches avoid enumerating exponentially many simple paths.
+  for(let from=0;from<graph.length;from++)for(const to of graph[from]){
+    const seen=new Set<number>([to]);
+    const queue=[to];
+    for(let head=0;head<queue.length;head++)for(const next of graph[queue[head]]){
+      if(queue[head]===to&&next===from)continue;
+      if(next===from)return false;
+      if(!seen.has(next)){seen.add(next);queue.push(next);}
+    }
+  }
+  return true;
 }

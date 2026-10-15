@@ -17,7 +17,8 @@
     "test:odoo-exports": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-exports.test.ts",
     "test:odoo-customer-review": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-customer-review.test.ts",
     "db:migrate:order-deletion": "node --env-file=.env --import tsx scripts/migrate-order-deletion.ts",
-    "test:order-deletion": "node --import ./tests/deletion-register.mjs --import tsx --test tests/order-deletion.test.ts"
+    "test:order-deletion": "node --import ./tests/deletion-register.mjs --import tsx --test tests/order-deletion.test.ts",
+    "test:promotion-pricing": "node --import ./tests/server-only-register.mjs --import tsx --test tests/promotion-pricing.test.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",

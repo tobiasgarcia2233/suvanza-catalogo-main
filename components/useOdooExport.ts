@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { ExportProgress } from '@/lib/odooExport';
-import { exportAction, parseExportResponse } from '@/lib/odooExportStatus';
+import { exportAction, parseExportResponse, needsHistoricalPricingReview, canRecompareCustomer } from '@/lib/odooExportStatus';
 
 /**
  * Local Odoo export state of one order, read from odoo_exports through
@@ -33,7 +33,8 @@ export function useOdooExport(orderId: string) {
   },[orderId,refresh]);
   /** Resolves with the new state, or undefined when nothing was applied. */
   async function send(body: Record<string,unknown> = {}): Promise<{next:ExportProgress|null}|undefined> {
-    if (readError || reading || progress?.migration_required) return;
+    if (busy || readError || reading || progress?.migration_required ||
+      (Object.keys(body).length===0 && !exportAction(progress) && !canRecompareCustomer(progress))) return;
     setBusy(true);setError('');
     try {
       const r=await fetch(`/api/orders/${orderId}/finalize`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -44,6 +45,6 @@ export function useOdooExport(orderId: string) {
   }
   const action = exportAction(progress,!!readError);
   const blocked = busy || reading || !!readError || !!progress?.migration_required;
-  const canCorrect = !!progress?.customer_buyer && !progress.quotation_id && !progress.phase?.endsWith('creating') && progress.status !== 'exported' && progress.status !== 'processing';
+  const canCorrect = !needsHistoricalPricingReview(progress) && !!progress?.customer_buyer && !progress.quotation_id && !progress.phase?.endsWith('creating') && progress.status !== 'exported' && progress.status !== 'processing';
   return {progress,busy,error,readError,reading,send,reload:()=>setRefresh(value=>value+1),action,blocked,canCorrect};
 }

@@ -1,6 +1,7 @@
+import { retryPaidOrder } from '@/lib/odooRetry';
 import { requireActiveOrder, OrderActionError } from "@/lib/orderDeletion";
 import { NextResponse } from "next/server";
-import { exportPaidOrder, getExport } from "@/lib/odooExport";
+import { getExport } from "@/lib/odooExport";
 import { exportAction } from '@/lib/odooExportStatus';
 import { readSessionFromCookie } from "@/lib/auth";
 
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     const progress = await Promise.all(ids.map((id: string)=>getExport(id)));
     if (progress.some(p=>exportAction(p) !== 'retry')) return NextResponse.json({message:'La selección incluye pedidos manuales, enviados o que requieren revisión. Actualizá el estado y usá la acción de cada pedido.'},{status:409});
     const results = [];
-    for (const id of ids) results.push({id, export:await exportPaidOrder(id)});
+    for (const id of ids) results.push({id, export:await retryPaidOrder(id,session.sub)});
     return NextResponse.json({ message: "ok", count: ids.length, results });
   } catch (err) {
     if (err instanceof OrderActionError) return NextResponse.json({message:err.message},{status:err.status});

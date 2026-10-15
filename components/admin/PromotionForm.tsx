@@ -1,5 +1,6 @@
 "use client";
 
+import { validatePromotion } from "@/lib/checkoutPricing";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CrossPromotion, Product } from "@/types";
@@ -157,6 +158,7 @@ export default function PromotionForm({
         })),
         linkedProductIds: state.linkedProductIds,
       };
+      validatePromotion({title:payload.title,totalPrice:payload.totalPrice,items:payload.items.map(i => ({...i,id:i.itemId,name:i.itemName}))});
       const res = await fetch(
         isEdit
           ? `/api/promotions/${encodeURIComponent(promo!.id)}`

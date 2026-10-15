@@ -19,6 +19,7 @@ export function orderDisplayStatus(paid: boolean, exportStatus: string | null | 
     case "legacy_sent":
       return "odoo_sent";
     case "review":
+    case "pricing_review":
     case "customer_review":
     case "customer_selection":
       return "odoo_review";

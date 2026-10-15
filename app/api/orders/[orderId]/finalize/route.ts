@@ -1,3 +1,5 @@
+import { retryPaidOrder } from '@/lib/odooRetry';
+import { repairPricing } from '@/lib/odooPricingRepair';
 import { isOrderDeleted, OrderActionError } from '@/lib/orderDeletion';
 import { NextResponse } from 'next/server';
 import { readSessionFromCookie } from '@/lib/auth';
@@ -34,6 +36,13 @@ export async function POST(request: Request, context: { params: Promise<{orderId
       return NextResponse.json({message:error instanceof OrderActionError ? error.message : 'No se pudo conciliar el pedido eliminado.'},{status:error instanceof OrderActionError ? error.status : 503});
     }
   }
+  if (body.action === 'repair_pricing') {
+    try {
+      return NextResponse.json({repair:await repairPricing(orderId,session.sub,{items:body.items,source:body.source,token:body.token,apply:body.apply === true,catalogueUnchangedSince:body.catalogueUnchangedSince})});
+    } catch (error) {
+      return NextResponse.json({message:error instanceof Error ? error.message : 'Reparación no disponible.'},{status:409});
+    }
+  }
   if (body.partnerId !== undefined && (!Number.isSafeInteger(body.partnerId) || body.partnerId <= 0)) return NextResponse.json({message:'Cliente inválido'},{status:400});
   let action: CustomerReviewAction | undefined;
   if (body.action !== undefined) {
@@ -47,7 +56,7 @@ export async function POST(request: Request, context: { params: Promise<{orderId
     } else action = {...base,kind:'defer'};
   }
   try {
-    return NextResponse.json({export:await exportPaidOrder(orderId,action ? undefined : body.partnerId,undefined,undefined,action)});
+    return NextResponse.json({export:await (action ? exportPaidOrder(orderId,undefined,undefined,undefined,action) : retryPaidOrder(orderId,session.sub,body.partnerId))});
   } catch (error) {
     return NextResponse.json({message:error instanceof OrderActionError ? error.message : 'No se pudo procesar la exportación.'},{status:error instanceof OrderActionError ? error.status : 503});
   }
