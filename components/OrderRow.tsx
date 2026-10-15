@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isClosedSale, type Order } from "@/types";
+import { DISPLAY_STATUS_META, orderDisplayStatus } from "@/lib/orderDisplayStatus";
 import {
+  AlertTriangle,
   Check,
   CheckCircle,
   ChevronDown,
@@ -14,15 +16,16 @@ import {
   Package,
   Pencil,
   Printer,
+  Send,
   StickyNote,
   Trash2,
 } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useUIStore } from "@/store/uiStore";
-import { OdooExportStatus } from "./OdooExportStatus";
 import NotesModal from "./NotesModal";
 import PaymentMethodModal from "./PaymentMethodModal";
 import PrintOrderModal from "./PrintOrderModal";
+import OdooModal from "./OdooModal";
 
 interface OrderRowProps {
   order: Order;
@@ -40,6 +43,7 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const [odooOpen, setOdooOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -65,6 +69,8 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
   }, [menuOpen]);
 
   const isCompleted = isClosedSale(order.status);
+  // Odoo state comes only from odoo_exports (odoo_export_status).
+  const displayStatus = DISPLAY_STATUS_META[orderDisplayStatus(isCompleted, order.odoo_export_status)];
   const anyBusy = busy !== null || isPending;
   const hasNotes = !!(order.notes && order.notes.trim());
   const paymentsList = order.payments ?? [];
@@ -238,13 +244,9 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
         </div>
         <div className="flex justify-center">
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              isCompleted
-                ? "bg-green-100 text-green-800"
-                : "bg-yellow-100 text-yellow-800"
-            }`}
+            className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${displayStatus.badge}`}
           >
-            {isCompleted ? "Pagada" : "Pendiente"}
+            {displayStatus.label}
           </span>
         </div>
 
@@ -277,8 +279,8 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
                 )}
                 {isCompleted && (
                   <span
-                    className="bg-green-500 rounded-full w-2 h-2"
-                    title="Pagada"
+                    className={`${displayStatus.dot} rounded-full w-2 h-2`}
+                    title={displayStatus.label}
                   />
                 )}
               </span>
@@ -331,6 +333,23 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
                   Ver / imprimir
                 </button>
 
+                {isCompleted && (
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setOdooOpen(true);
+                    }}
+                    className="flex items-center gap-2 hover:bg-background px-3 py-2 w-full text-sm text-left transition"
+                  >
+                    <Send size={16} className="text-text-secondary" />
+                    Odoo
+                    {displayStatus.attention && (
+                      <span className={`${displayStatus.dot} ml-auto rounded-full w-2 h-2`} />
+                    )}
+                  </button>
+                )}
+
                 <button
                   role="menuitem"
                   onClick={handleEditClick}
@@ -369,7 +388,21 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
         </div>
       </div>
 
-      {isCompleted && <OdooExportStatus orderId={order.id} legacySent={!!order.odoo_sent_at || order.status === "ODOO_SENT"} />}
+      {displayStatus.attention && (
+        <button
+          type="button"
+          onClick={() => setOdooOpen(true)}
+          className={`flex w-full items-center gap-2 border-t px-4 py-2 text-left text-sm transition ${
+            order.odoo_export_status === "error"
+              ? "border-red-200 bg-red-50 text-red-800 hover:bg-red-100"
+              : "border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100"
+          }`}
+        >
+          <AlertTriangle size={15} className="shrink-0" />
+          {order.odoo_export_status === "error" ? "Error al enviar a Odoo" : "Requiere revisión en Odoo"}
+          <span className="ml-auto font-semibold underline">Resolver</span>
+        </button>
+      )}
 
       {itemsOpen && (
         <div className="border-t border-border bg-background/40 px-4 py-4">
@@ -442,6 +475,13 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
         initialPayments={order.payments ?? null}
         buyerName={order.buyer_details.name}
         onSaved={refresh}
+      />
+      <OdooModal
+        open={odooOpen}
+        onClose={() => setOdooOpen(false)}
+        orderId={order.id}
+        buyerName={order.buyer_details.name}
+        onChanged={() => startTransition(() => router.refresh())}
       />
       <PrintOrderModal
         open={printOpen}
