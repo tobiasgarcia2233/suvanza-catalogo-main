@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OrderActionError } from "@/lib/orderDeletion";
-import { deleteOrder, updateOrder, getOrder } from "@/lib/orderQueries";
+import { deleteOrder, updateOrder, getOrder, setOrderEvent } from "@/lib/orderQueries";
 import { getSellerBySlug } from "@/lib/sellerQueries";
 import { readSessionFromCookie } from "@/lib/auth";
 import { exportPaidOrder } from "@/lib/odooExport";
@@ -117,7 +117,14 @@ export async function PATCH(
 
     // Admin-only fields: a seller editing via their personal link may only
     // touch the "full edit from cart" shape handled above.
+    let eventId: string | null | undefined;
     if (!isSellerEdit) {
+      if (body.event_id !== undefined) {
+        if (body.event_id !== null && (typeof body.event_id !== "string" || !body.event_id)) {
+          return NextResponse.json({ message: "Evento inválido." }, { status: 400 });
+        }
+        eventId = body.event_id;
+      }
       if (body.status !== undefined) {
         if (!ADMIN_SETTABLE_STATUSES.has(body.status)) {
           return NextResponse.json({ message: "Estado inválido." }, { status: 400 });
@@ -155,6 +162,7 @@ export async function PATCH(
     }
 
     await updateOrder(orderId, patch);
+    if (eventId !== undefined) await setOrderEvent(orderId, eventId);
     const odooExport = patch.status === "COMPLETED" ? await exportPaidOrder(orderId) : undefined;
     return NextResponse.json({ message: "Order updated", odooExport });
   } catch (error) {

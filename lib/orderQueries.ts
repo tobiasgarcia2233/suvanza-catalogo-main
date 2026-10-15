@@ -335,6 +335,20 @@ export async function updateOrder(
   } finally { transaction.close(); }
 }
 
+/**
+ * Moves an order to another sales context: an event id, or null for
+ * "Individual". Only the context changes — seller, lines and payment stay —
+ * so it is allowed on paid and exported orders too (Odoo never sees events).
+ */
+export async function setOrderEvent(id: string, eventId: string | null): Promise<void> {
+  const result = await db.execute({
+    sql: `UPDATE orders SET event_id = ? WHERE id = ? AND ${activeOrderSql()}
+          AND (? IS NULL OR EXISTS (SELECT 1 FROM events WHERE id = ?))`,
+    args: [eventId, id, eventId, eventId],
+  });
+  if (!result.rowsAffected) throw new OrderActionError("Pedido eliminado o inexistente, o el evento ya no existe.", 404);
+}
+
 export async function deleteOrder(id: string, actor: string, sellerOnly = false): Promise<void> {
   await softDeleteOrder(id,actor,sellerOnly);
 }
