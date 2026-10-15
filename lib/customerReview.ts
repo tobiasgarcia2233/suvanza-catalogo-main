@@ -104,3 +104,47 @@ export function normalizedPhone(value: string, countryCode = ''): string {
   }
   return compact;
 }
+
+/**
+ * Argentine national numbers (area code + subscriber, 10 digits) a phone can
+ * stand for. Catalog phones are typed locally ("11 15 5555-0000",
+ * "011 5555-0000") while Odoo stores them international ("+54 9 11 5555-0000"),
+ * so the country code, the mobile 9, the trunk 0 and the mobile 15 are dropped.
+ * The area code length (2–4) is unknown, so "15" yields one candidate per
+ * position. Empty when the phone is not an Argentine number.
+ */
+function argentineNumbers(value: string, countryCode: string): Set<string> {
+  const found = new Set<string>();
+  const compact = value.trim().replace(/[\s().-]/g, '');
+  if (!/^\+?\d+$/.test(compact)) return found;
+  const international = compact.startsWith('+') || compact.startsWith('00');
+  const digits = compact.replace(/^\+|^00/, '');
+  const national = (rest: string) => {
+    if (rest.length === 11 && rest.startsWith('9')) rest = rest.slice(1);
+    if (rest.length === 10) found.add(rest);
+  };
+  if (international) {
+    if (digits.startsWith('54')) national(digits.slice(2));
+    return found;
+  }
+  if (countryCode !== 'AR' && countryCode !== '') return found;
+  // "54 11 …" typed without the plus.
+  if (digits.startsWith('54') && digits.length >= 12) national(digits.slice(2));
+  const local = digits.startsWith('0') ? digits.slice(1) : digits;
+  if (local.length === 10) found.add(local);
+  if (local.length === 12) {
+    for (const at of [2, 3, 4]) if (local.slice(at, at + 2) === '15') found.add(local.slice(0, at) + local.slice(at + 2));
+  }
+  return found;
+}
+
+/**
+ * Whether two phones reach the same line. Argentine numbers are compared by
+ * their national number, whatever prefixes each side used; anything else
+ * keeps the strict formatting comparison of normalizedPhone.
+ */
+export function phonesMatch(a: string, aCountry: string, b: string, bCountry: string): boolean {
+  const x = argentineNumbers(a, aCountry), y = argentineNumbers(b, bCountry);
+  if (x.size && y.size) return [...x].some(number => y.has(number));
+  return normalizedPhone(a, aCountry) === normalizedPhone(b, bCountry);
+}

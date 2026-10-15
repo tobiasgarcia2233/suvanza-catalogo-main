@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { normalizeDni } from './odooExportValues';
 import { search, type Call, type ExportSnapshot } from './odooQuotation';
-import { namesMatch, normalizedPhone, type BuyerData, type CustomerComparison, type CustomerReviewData } from './customerReview';
+import { namesMatch, phonesMatch, type BuyerData, type CustomerComparison, type CustomerReviewData } from './customerReview';
 
 export function readCustomerData(value: unknown): CustomerReviewData {
   return value ? JSON.parse(String(value)) : { revision: 0, audit: [], created: [] };
@@ -43,7 +43,7 @@ export async function compareCustomer(call: Call, s: ExportSnapshot, partnerId: 
   const local = { name: s.buyer.name || '', dni: s.buyer.dni || '', phone: s.buyer.phone || '' };
   const differences = {
     name: !namesMatch(local.name, remote.name),
-    phone: normalizedPhone(local.phone, localCountry) !== normalizedPhone(remote.phone, remote.countryCode),
+    phone: !phonesMatch(local.phone, localCountry, remote.phone, remote.countryCode),
     document: !documentMatches,
   };
   // Raw values are intentionally bound too: staff approve exactly what was shown.

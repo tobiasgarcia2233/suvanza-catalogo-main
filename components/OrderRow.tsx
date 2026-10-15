@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isClosedSale, type Order } from "@/types";
 import { DISPLAY_STATUS_META, orderDisplayStatus } from "@/lib/orderDisplayStatus";
+import type { EventOption } from "@/lib/eventQueries";
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   CheckCircle,
   ChevronDown,
@@ -26,16 +28,19 @@ import NotesModal from "./NotesModal";
 import PaymentMethodModal from "./PaymentMethodModal";
 import PrintOrderModal from "./PrintOrderModal";
 import OdooModal from "./OdooModal";
+import OrderEventModal from "./OrderEventModal";
 
 interface OrderRowProps {
   order: Order;
   /** Sales context shown under who made the sale. */
   eventName?: string;
+  /** Events the admin can move the order to. */
+  events?: EventOption[];
 }
 
 type Busy = null | "paying" | "deleting" | "editing";
 
-export function OrderRow({ order, eventName }: OrderRowProps) {
+export function OrderRow({ order, eventName, events = [] }: OrderRowProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState<Busy>(null);
@@ -44,6 +49,7 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [odooOpen, setOdooOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -333,6 +339,18 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
                   Ver / imprimir
                 </button>
 
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setEventOpen(true);
+                  }}
+                  className="flex items-center gap-2 hover:bg-background px-3 py-2 w-full text-sm text-left transition"
+                >
+                  <CalendarDays size={16} className="text-text-secondary" />
+                  Cambiar evento
+                </button>
+
                 {isCompleted && (
                   <button
                     role="menuitem"
@@ -482,6 +500,16 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
         orderId={order.id}
         buyerName={order.buyer_details.name}
         onChanged={() => startTransition(() => router.refresh())}
+      />
+      <OrderEventModal
+        open={eventOpen}
+        onClose={() => setEventOpen(false)}
+        orderId={order.id}
+        buyerName={order.buyer_details.name}
+        sellerName={order.seller_name}
+        currentEventId={order.event_id ?? null}
+        events={events}
+        onSaved={refresh}
       />
       <PrintOrderModal
         open={printOpen}

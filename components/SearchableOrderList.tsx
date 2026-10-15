@@ -309,6 +309,7 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
               <OrderRow
                 key={order.id}
                 order={order}
+                events={events}
                 eventName={
                   order.event_id
                     ? eventNames.get(order.event_id) ?? "Evento eliminado"
