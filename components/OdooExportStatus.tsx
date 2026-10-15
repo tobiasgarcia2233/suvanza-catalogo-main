@@ -2,46 +2,21 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CUSTOMER_REVIEW_MESSAGE, type BuyerData } from '@/lib/customerReview';
-import type { ExportProgress as Progress } from '@/lib/odooExport';
-import { exportAction, parseExportResponse, displayExportError, EXPORT_MIGRATION_MESSAGE } from '@/lib/odooExportStatus';
+import { displayExportError, EXPORT_MIGRATION_MESSAGE } from '@/lib/odooExportStatus';
+import { useOdooExport } from './useOdooExport';
 export function OdooExportStatus({orderId,legacySent=false,onRetryAllowed}:{orderId:string;legacySent?:boolean;onRetryAllowed?:(orderId:string,allowed:boolean)=>void}) {
   const router = useRouter();
-  const [progress,setProgress] = useState<Progress|null>(null);
-  const [busy,setBusy] = useState(false);
-  const [error,setError] = useState('');
-  const [readError,setReadError] = useState('');
-  const [reading,setReading] = useState(false);
-  const [refresh,setRefresh] = useState(0);
+  const {progress,busy,error,readError,reading,send:post,reload,action,blocked,canCorrect} = useOdooExport(orderId);
   const [open,setOpen] = useState(false);
   const [editing,setEditing] = useState(false);
   const [form,setForm] = useState<BuyerData>({name:'',dni:'',phone:''});
   const [formRevision,setFormRevision] = useState(0);
-  useEffect(()=>{setProgress(null);setError('');setReadError('');setOpen(false);setEditing(false);},[orderId]);
-  useEffect(()=>{
-    let active=true;
-    const controller = new AbortController();
-    setReading(true);
-    void (async()=>{
-      try {
-        const response = await fetch(`/api/orders/${orderId}/finalize`,{cache:'no-store',signal:controller.signal});
-        const next = await parseExportResponse(response);
-        if(active) {setProgress(next);setReadError('');}
-      } catch(e) {
-        if(active) setReadError(e instanceof Error ? e.message : 'No se pudo consultar la exportación.');
-      } finally {if(active) setReading(false);}
-    })();
-    return ()=>{active=false;controller.abort();};
-  },[orderId,refresh]);
+  useEffect(()=>{setOpen(false);setEditing(false);},[orderId]);
   async function send(body: Record<string,unknown> = {}) {
-    if (readError || reading || progress?.migration_required) return;
-    setBusy(true);setError('');
-    try {
-      const r=await fetch(`/api/orders/${orderId}/finalize`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const next=await parseExportResponse(r);
-      setProgress(next);
-      if(body.action === 'correct' && next?.customer_revision !== formRevision) {setEditing(false);router.refresh();}
-      if(body.action === 'defer') {setOpen(false);setEditing(false);}
-    } catch(e){setError(e instanceof Error ? e.message:'No se pudo reintentar.');setReadError('Actualizá el estado antes de volver a actuar.');}finally{setBusy(false);}
+    const result = await post(body);
+    if (!result) return;
+    if(body.action === 'correct' && result.next?.customer_revision !== formRevision) {setEditing(false);router.refresh();}
+    if(body.action === 'defer') {setOpen(false);setEditing(false);}
   }
   function correct() {
     setForm(progress?.customer_buyer ?? {name:'',dni:'',phone:''});
@@ -49,18 +24,15 @@ export function OdooExportStatus({orderId,legacySent=false,onRetryAllowed}:{orde
   }
 
   const labels:Record<string,string>={pending:'Pendiente',processing:'Procesando',error:'Error',review:'Requiere conciliación',customer_review:'Revisar datos del cliente',customer_selection:'Seleccionar cliente',exported:'Enviado a Odoo',legacy_sent:'Registrado previamente'};
-  const action = exportAction(progress,!!readError);
-  const blocked = busy || reading || !!readError || !!progress?.migration_required;
   useEffect(()=>{onRetryAllowed?.(orderId,action === 'retry' && !blocked);},[orderId,action,blocked,onRetryAllowed]);
   const review = progress?.customer_review;
-  const canCorrect = !!progress?.customer_buyer && !progress.quotation_id && !progress.phase?.endsWith('creating') && progress.status !== 'exported' && progress.status !== 'processing';
   const button = 'm-1 rounded border px-3 py-2 disabled:opacity-50';
   const different = 'bg-amber-100 font-semibold';
   return <div className="px-4 pb-3 text-sm" aria-live="polite">
     <p>Odoo: {progress ? labels[progress.status] ?? progress.status : legacySent ? 'Registrado previamente (gestión manual)' : reading ? 'Consultando estado…' : readError ? 'Estado no disponible' : 'Sin exportación automática (gestión manual)'} {progress?.quotation_ref && `· ${progress.quotation_ref}`} {progress?.quotation_id && `(ID ${progress.quotation_id})`}</p>
     {readError && <p className="text-red-700">{readError} Se conserva el último estado conocido.</p>}
     {progress?.migration_required && <p className="text-amber-900">{EXPORT_MIGRATION_MESSAGE}</p>}
-    <button disabled={busy || reading} className={button} onClick={()=>setRefresh(value=>value+1)}>{reading ? 'Consultando…' : 'Actualizar estado'}</button>
+    <button disabled={busy || reading} className={button} onClick={reload}>{reading ? 'Consultando…' : 'Actualizar estado'}</button>
     {progress?.status === 'customer_review' && <p className="font-semibold text-amber-900">{CUSTOMER_REVIEW_MESSAGE}</p>}
     {(error||(progress?.error && progress.error !== CUSTOMER_REVIEW_MESSAGE))&&<p className="text-red-700">{displayExportError(error||progress?.error)}</p>}
     {progress?.quotation_id && progress.status !== 'exported' && <p>El presupuesto existente necesita revisión separada en Odoo; no se reasignará desde este pedido.</p>}
