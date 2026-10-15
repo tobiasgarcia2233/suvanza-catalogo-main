@@ -1,6 +1,7 @@
 import 'server-only';
 import { odooCall } from './odooClient';
 import { normalizeDni } from './odooExportValues';
+import { missingOdooProductMessage } from './odooExportStatus';
 // JSON-2 records have dynamic fields, checked at their usage boundary.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RecordData = Record<string, any>;
@@ -23,6 +24,7 @@ export async function customers(call: Call, s: ExportSnapshot) {
   return rows.filter(row => { try { return normalizeDni(row.vat) === normalizeDni(s.buyer.dni); } catch { return false; } });
 }
 export function customerPayload(s: ExportSnapshot) {
+  if (!s.buyer.name?.trim() || !s.buyer.phone?.trim()) throw new Error('Falta nombre o teléfono para crear el cliente. Corregí los datos del pedido.');
   return { name: s.buyer.name.trim(), phone: s.buyer.phone.trim(), vat: normalizeDni(s.buyer.dni),
     l10n_latam_identification_type_id: s.config.dniType, l10n_ar_afip_responsibility_type_id: s.config.responsibility,
     company_id: 1, country_id: s.config.country, ref: s.reference };
@@ -34,8 +36,7 @@ export async function validateConfig(call: Call, s: ExportSnapshot) {
   const [responsibility] = await search(call,'l10n_ar.afip.responsibility.type',[['id','=',c.responsibility]],['name']);
   if (dni?.name !== 'DNI' || dni.country_id?.[0] !== c.country || responsibility?.name !== 'IVA Responsable Inscripto') throw new Error('La configuración fiscal no corresponde a DNI / IVA Responsable Inscripto. Revisá los IDs.');
   normalizeDni(s.buyer.dni);
-  if (!s.buyer.name?.trim() || !s.buyer.phone?.trim()) throw new Error('Falta nombre o teléfono del comprador.');
-  for (const line of s.lines) if (!line.productId) throw new Error(`Vinculá la variante ${line.name} (${line.variantId}) a product.product. La referencia del producto padre no sirve. Guardá el vínculo y reintentá; solo se completan vínculos que estaban vacíos.`);
+  for (const line of s.lines) if (!line.productId) throw new Error(missingOdooProductMessage(line.name));
 }
 
 export async function quotationPayload(call: Call, s: ExportSnapshot, partnerId: number) {

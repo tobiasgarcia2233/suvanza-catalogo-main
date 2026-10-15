@@ -14,7 +14,8 @@
     "db:reset": "node --env-file=.env.local --import tsx scripts/migrate.ts -- --wipe",
     "auth:hash": "node --env-file=.env.local --import tsx scripts/hash-password.ts",
     "db:migrate:odoo-exports": "node --env-file=.env --import tsx scripts/migrate-odoo-exports.ts",
-    "test:odoo-exports": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-exports.test.ts"
+    "test:odoo-exports": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-exports.test.ts",
+    "test:odoo-customer-review": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-customer-review.test.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
