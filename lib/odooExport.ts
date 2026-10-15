@@ -1,8 +1,10 @@
 import 'server-only';
+import { cents } from './money';
+import { needsPricingRepair, assessPricingRecovery, PRICING_REVIEW, type PricingRepair } from './odooPricingRepair';
 import type { Client } from '@libsql/client';
 import { db } from './db';
 import { isOrderDeleted, requireActiveOrder, OrderActionError } from './orderDeletion';
-import { EXPORT_MIGRATION_MESSAGE } from './odooExportStatus';
+import { EXPORT_MIGRATION_MESSAGE, needsHistoricalPricingReview } from './odooExportStatus';
 import { odooCall, OdooError } from './odooClient';
 import { commercialLines, normalizeDni } from './odooExportValues';
 import { customers, customerPayload, quotationPayload, search, validateConfig, type Call, type ExportSnapshot, type RecordData } from './odooQuotation';
@@ -11,21 +13,28 @@ import { CUSTOMER_REVIEW_MESSAGE, type CustomerReviewAction, type CustomerCompar
 import { compareCustomer, customerReference, readCustomerData, validateCorrection } from './odooCustomerReview';
 
 function config(): ExportSnapshot['config'] {
-  return { dniType:Number(process.env.ODOO_DNI_TYPE_ID),responsibility:Number(process.env.ODOO_CUSTOMER_RESPONSIBILITY_ID),country:Number(process.env.ODOO_COUNTRY_ID),currency:Number(process.env.ODOO_CURRENCY_ID),pricelist:Number(process.env.ODOO_PRICELIST_ID),priceBasis:process.env.ODOO_LOCAL_PRICE_BASIS ?? '' };
+  return { dniType:Number(process.env.ODOO_DNI_TYPE_ID),responsibility:Number(process.env.ODOO_CUSTOMER_RESPONSIBILITY_ID),country:Number(process.env.ODOO_COUNTRY_ID),currency:Number(process.env.ODOO_CURRENCY_ID),pricelist:Number(process.env.ODOO_PRICELIST_ID),priceBasis:'catalogue' };
 }
 export async function snapshotOrder(client: Pick<Client, "execute">, order: Order): Promise<ExportSnapshot> {
-  const lines = order.items.map(item => ({variantId:String(item.id),name:item.name,quantity:item.quantity,total:item.finalPrice as number}));
+  const lines = order.items.map(item => ({variantId:String(item.id),name:item.name,quantity:item.quantity,total:item.finalPrice as number,pricing:item.pricing}));
   const mapped = await client.execute({ sql:`SELECT id, odoo_product_id FROM variants WHERE id IN (${lines.map(() => '?').join(',')})`, args:lines.map(l => l.variantId) });
   return {reference:`SUVANZA-CATALOGO:${order.id}`,total:order.total,buyer:order.buyer_details,config:config(),lines:lines.map(line => ({...line,productId: Number(mapped.rows.find(r => r.id === line.variantId)?.odoo_product_id) || null}))};
 }
-export type ExportProgress = {status:string;migration_required?:boolean;partner_id?:number|null;quotation_id?:number|null;quotation_ref?:string|null;error?:string|null;phase?:string;customer_revision?:number;customer_review?:CustomerComparison;customer_buyer?:BuyerData;original_buyer?:BuyerData;created_customers?:{id:number;reference:string;revision:number}[];candidates?:{id:number;name:string;phone:string;active:boolean}[]};
+export type ExportProgress = {status:string;pricing_review?:import('./pricingRecovery').PricingReviewState;pricing_repaired?:boolean;migration_required?:boolean;partner_id?:number|null;quotation_id?:number|null;quotation_ref?:string|null;error?:string|null;phase?:string;customer_revision?:number;customer_review?:CustomerComparison;customer_buyer?:BuyerData;original_buyer?:BuyerData;created_customers?:{id:number;reference:string;revision:number}[];candidates?:{id:number;name:string;phone:string;active:boolean}[]};
 export async function getExport(orderId: string, client = db): Promise<ExportProgress | null> {
   // Read pre-review rows too: customer_data is additive and nullable. Never migrate on GET.
   const result = await client.execute({sql:'SELECT * FROM odoo_exports WHERE order_id = ?',args:[orderId]});
   const row = result.rows[0];
   const customer = readCustomerData(row?.customer_data);
-  const original = row ? JSON.parse(String(row.snapshot)).buyer : undefined;
-  return row ? {migration_required:!Object.hasOwn(row,'customer_data'), customer_revision:customer.revision, customer_review:customer.review, customer_buyer:customer.buyer ?? original, original_buyer:original, created_customers:customer.created, status:String(row.status),partner_id:row.partner_id ? Number(row.partner_id) : null,quotation_id:row.quotation_id ? Number(row.quotation_id) : null,quotation_ref:row.quotation_ref ? String(row.quotation_ref) : null,error:row.error ? String(row.error) : null,phase:String(row.phase),candidates:row.candidates ? JSON.parse(String(row.candidates)) : []} : null;
+  const snapshot:ExportSnapshot|undefined=row ? JSON.parse(String(row.snapshot)):undefined;
+  const original=snapshot?.buyer;
+  let pricingReview:ExportProgress['pricing_review'];
+  // Normalize legacy error messages on read without modifying orders/outbox rows.
+  if (row && snapshot && needsHistoricalPricingReview({status:String(row.status),error:String(row.error ?? ''),phase:String(row.phase),quotation_id:Number(row.quotation_id)||null,pricing_repaired:!!row.pricing_data})) {
+    const purchase=(await client.execute({sql:'SELECT created_at,total,items,promos_sold FROM orders WHERE id=?',args:[orderId]})).rows[0];
+    pricingReview=assessPricingRecovery(snapshot,purchase);
+  }
+  return row ? {pricing_review:pricingReview,pricing_repaired:!!row.pricing_data,migration_required:!Object.hasOwn(row,'customer_data'), customer_revision:customer.revision, customer_review:customer.review, customer_buyer:customer.buyer ?? original, original_buyer:original, created_customers:customer.created, status:pricingReview?'pricing_review':String(row.status),partner_id:row.partner_id ? Number(row.partner_id) : null,quotation_id:row.quotation_id ? Number(row.quotation_id) : null,quotation_ref:row.quotation_ref ? String(row.quotation_ref) : null,error:pricingReview?.message ?? (row.error ? String(row.error) : null),phase:String(row.phase),candidates:row.candidates ? JSON.parse(String(row.candidates)) : []} : null;
 }
 /** Persistent lease + write-ahead phases, not search-then-create uniqueness. */
 export async function exportPaidOrder(orderId: string, selectedPartner?: number, client: Client = db, call: Call = odooCall, action?: CustomerReviewAction, reconcileDeleted = false) {
@@ -75,7 +84,8 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
     owned = true;
     state = (await client.execute({sql:'SELECT * FROM odoo_exports WHERE order_id = ?',args:[orderId]})).rows[0];
     const wasReview = state.status === 'review';
-    const s: ExportSnapshot = JSON.parse(state.snapshot);
+    const repair: PricingRepair | null = state.pricing_data ? JSON.parse(state.pricing_data) : null;
+    const s: ExportSnapshot = repair ? structuredClone(repair.snapshot) : JSON.parse(state.snapshot);
     const customer = readCustomerData(state.customer_data);
     if (action) {
       await requireActiveOrder(orderId,client);
@@ -134,11 +144,10 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
         const r = await client.execute({sql:'SELECT odoo_product_id FROM variants WHERE id = ?',args:[line.variantId]});
         line.productId = Number(r.rows[0]?.odoo_product_id) || null;
       }
-      await save({snapshot:JSON.stringify(s)});
+      if (repair) { repair.snapshot = s; await save({pricing_data:JSON.stringify(repair)}); }
+      else await save({snapshot:JSON.stringify(s)});
     }
     s.buyer = customer.buyer ?? s.buyer;
-    commercialLines({total:s.total,items:s.lines.map(l=>({id:l.variantId,name:l.name,brand:"",quantity:l.quantity,finalPrice:l.total,discountPercentage:0}))});
-    await validateConfig(call,s);
     await save({status:'processing',error:null,candidates:null});
     const refDomain = [['company_id','=',1],'|',['origin','=',s.reference],['client_order_ref','=',s.reference]];
     const found = await search(call,'sale.order',refDomain,['name','state','partner_id','currency_id','amount_total','order_line','origin','client_order_ref']);
@@ -151,6 +160,15 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
     if (!quotation && reconcileDeleted && state.phase !== 'customer_creating') {
       await save({status:'review',error:'Pedido eliminado: no se encontró un presupuesto existente. No se crearán nuevos registros en Odoo.'});
       return await getExport(orderId,client);
+    }
+    if (!quotation) {
+      const historicalPromos = row.promos_sold ? JSON.parse(String(row.promos_sold)) : null;
+      if (needsPricingRepair({promos_sold:historicalPromos,autoApplyPromos:!!row.auto_apply_promos},s)) {
+        await save({status:'pricing_review',error:PRICING_REVIEW});
+        return await getExport(orderId,client);
+      }
+      commercialLines({total:s.total,items:s.lines.map(l=>({id:l.variantId,name:l.name,brand:"",quantity:l.quantity,finalPrice:l.total,discountPercentage:0}))});
+      await validateConfig(call,s);
     }
     if (!quotation && !state.partner_id) {
       const matches = await customers(call,s); // Failure must propagate, never converted to [].
@@ -214,7 +232,10 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
         delete customer.review;
         await save({customer_data:JSON.stringify(customer)});
       }
-      const payload = state.payload && customer.preparedFor === comparison.token ? JSON.parse(state.payload) : await quotationPayload(call,s,Number(state.partner_id));
+      // Rebuild from the purchased snapshot on every safe pre-create retry.
+      // Cached payloads from the former tax conversion must never be submitted.
+      // Existing/uncertain quotations took the reconciliation branch above.
+      const payload = await quotationPayload(call,s,Number(state.partner_id));
       // Preparation performs more reads. Check again immediately before the
       // write-ahead phase; a changed contact must never consume an old approval.
       const latest = await compareCustomer(call,s,Number(state.partner_id),customer.revision);
@@ -241,7 +262,7 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
     const actualLines = await search(call,'sale.order.line',[['order_id','=',quotation.id]],['product_id','product_uom_qty','price_unit','discount','tax_ids']);
     const expectedLines = payload?.order_line?.map((command: [number,number,RecordData])=>command[2]);
     const canonical = (lines: RecordData[], actual: boolean) => lines.map(l=>JSON.stringify([actual?l.product_id?.[0]:l.product_id,l.product_uom_qty,l.price_unit,l.discount,[...(actual?l.tax_ids:l.tax_ids[0][2])].sort((a,b)=>a-b)])).sort().join('|');
-    if (!payload || quotation.state !== 'draft' || quotation.partner_id?.[0] !== state.partner_id || quotation.currency_id?.[0] !== s.config.currency || quotation.origin !== s.reference || quotation.client_order_ref !== s.reference || !Number.isFinite(quotation.amount_total) || Math.abs(quotation.amount_total-s.total)>0.005 || canonical(actualLines,true)!==canonical(expectedLines,false)) {
+    if (!payload || quotation.state !== 'draft' || quotation.partner_id?.[0] !== state.partner_id || quotation.currency_id?.[0] !== s.config.currency || quotation.origin !== s.reference || quotation.client_order_ref !== s.reference || !Number.isFinite(quotation.amount_total) || cents(quotation.amount_total)!==cents(s.total) || canonical(actualLines,true)!==canonical(expectedLines,false)) {
       await save({status:'review',error:'Presupuesto localizado pero estado, cliente, líneas, moneda o total no coinciden. Revisá en Odoo; no se creará otro.'});
     } else await save({status:'exported',phase:'done',error:null});
     return await getExport(orderId,client);

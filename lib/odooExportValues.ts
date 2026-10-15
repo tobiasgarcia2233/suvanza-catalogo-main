@@ -1,3 +1,4 @@
+import { cents } from './money';
 import type { Order } from '@/types';
 export function normalizeDni(value: unknown): string {
   if (typeof value !== 'string' || !/^[\d.\s-]+$/.test(value)) throw new Error('El DNI debe ser un texto con dígitos, sin letras.');
@@ -14,6 +15,6 @@ export function commercialLines(order: Pick<Order, 'items' | 'total'>) {
     // finalPrice is the whole NET-OF-DISCOUNT line, including allocated combos.
     return { variantId: String(item.id), name: item.name, quantity: item.quantity, total: item.finalPrice };
   });
-  if (Math.abs(lines.reduce((sum, line) => sum + line.total, 0) - order.total) > 0.005) throw new Error('Los componentes/promociones no suman el total acordado. Revisá la asignación original; no se recalcularán precios.');
+  if (lines.reduce((sum, line) => sum + cents(line.total), 0) !== cents(order.total)) throw new Error('Los componentes/promociones no suman el total acordado. Revisá la asignación original; no se recalcularán precios.');
   return lines;
 }

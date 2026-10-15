@@ -4,6 +4,7 @@ export const exportSchema = `CREATE TABLE IF NOT EXISTS odoo_exports (
  status TEXT NOT NULL DEFAULT 'pending',
  snapshot TEXT NOT NULL,
  customer_data TEXT,
+ pricing_data TEXT,
  partner_id INTEGER,
  quotation_id INTEGER UNIQUE,
  quotation_ref TEXT,
@@ -20,6 +21,9 @@ export async function migrateOdooExports(db: Client) {
   const columns = await db.execute("PRAGMA table_info(odoo_exports)");
   if (!columns.rows.some(column => column.name === "customer_data")) {
     await db.execute("ALTER TABLE odoo_exports ADD COLUMN customer_data TEXT");
+  }
+  if (!columns.rows.some(column => column.name === "pricing_data")) {
+    await db.execute("ALTER TABLE odoo_exports ADD COLUMN pricing_data TEXT");
   }
   await db.execute(`CREATE TABLE IF NOT EXISTS odoo_customer_claims (document_key TEXT PRIMARY KEY, order_id TEXT NOT NULL)`);
 }

@@ -38,7 +38,28 @@ export interface OdooProduct {
   companyName: string;
 }
 
+export interface PricingAllocation {
+  version: 2;
+  kind: 'promotion' | 'extra';
+  unitPrice: number;
+  agreedTotal: number;
+  baseUnitPrice?: number;
+  tiers?: PriceTier[];
+  tierQuantity?: number;
+  promotionId?: string;
+  allocationId?: string;
+  comboSource?: 'explicit' | 'automatic';
+  configuredUnitPrice?: number;
+  promotionTotal?: number;
+  repetitions?: number;
+  quantityPerPromotion?: number;
+  adjustment?: { manualPricePerUnit?: number | null; manualPercentage?: number; manualTotal?: number | null };
+}
+
 export interface CartItem extends Product {
+  promotionUnitPrice?: number;
+  promotionTotal?: number;
+  tierQuantity?: number;
   quantity: number;
   parentId?: number | string;
   customTotal?: number | null;
@@ -140,6 +161,7 @@ export interface Order {
     brand: string;
     name: string;
     quantity: number;
+    pricing?: PricingAllocation;
     finalPrice: number | null;
     discountPercentage: number;
   }[];

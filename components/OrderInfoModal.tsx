@@ -7,9 +7,8 @@ import { useCartStore } from "@/store/cartStore";
 import { gsap } from "gsap";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getProducts } from "@/store/productsStore";
 import { CartItem } from "@/types"; // <-- ADD THIS IMPORT IF NOT PRESENT
-import { expandComboRows } from "@/lib/comboRows";
+import { checkoutItems } from "@/lib/checkoutPricing";
 
 interface OrderInfoModalProps {
   sellerName: string;
@@ -104,70 +103,14 @@ export function OrderInfoModal({
         return promos;
       }, []);
 
-    // ====================== PAYLOAD BUILDER LOGIC START ======================
-    // This logic "unrolls" promos into their constituent items for the backend.
-    const flattenedItems = expandComboRows(items).reduce((acc: any[], item: CartItem) => {
-      // If it's a regular item, just format and add it.
-      if (!item.isPromo || !item.includedItems) {
-        acc.push({
-          id: item.id,
-          name: item.name,
-          brand: item.brand,
-          quantity: item.quantity,
-          finalPrice: item.customTotal,
-          discountPercentage: item.discountPercentage,
-        });
-        return acc;
-      }
-
-      // If it's a PROMO, unroll its contents.
-      const manifest = item.includedItems;
-      const bundleQuantity = item.quantity;
-
-      // Calculate the discount ratio to apply to each item within the bundle.
-      const bundleSubtotal = manifest.reduce((sum, manifestItem) => {
-        const variantData = getProducts()
-          .flatMap((p) => p.variants || [p])
-          .find((v) => v.id === manifestItem.id);
-        const basePrice = variantData?.priceTiers?.[0]?.pricePerUnit || 0;
-        return sum + basePrice * manifestItem.quantity;
-      }, 0);
-
-      const bundleTotalPrice = (item.customTotal ?? 0) / bundleQuantity;
-      const discountRatio =
-        bundleSubtotal > 0 ? bundleTotalPrice / bundleSubtotal : 1;
-
-      // Add each item from the manifest to the final list.
-      manifest.forEach((manifestItem) => {
-        const variantData = getProducts()
-          .flatMap((p) => p.variants || [p])
-          .find((v) => v.id === manifestItem.id);
-        const basePrice = variantData?.priceTiers?.[0]?.pricePerUnit || 0;
-
-        const finalPricePerUnit = basePrice * discountRatio;
-        const finalQuantity = manifestItem.quantity * bundleQuantity;
-        const finalTotalForLine = finalPricePerUnit * finalQuantity;
-        const finalSubtotalForLine = basePrice * finalQuantity;
-
-        acc.push({
-          id: manifestItem.id,
-          name: manifestItem.name,
-          brand: manifestItem.brand,
-          quantity: finalQuantity,
-          finalPrice: finalTotalForLine,
-          discountPercentage:
-            finalSubtotalForLine > 0
-              ? ((finalSubtotalForLine - finalTotalForLine) /
-                  finalSubtotalForLine) *
-                100
-              : 0,
-        });
-      });
-
-      return acc;
-    }, []);
-
-    // ======================= PAYLOAD BUILDER LOGIC END =======================
+    let flattenedItems;
+    try {
+      flattenedItems = checkoutItems(items, total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Precios inválidos.");
+      setIsSubmitting(false);
+      return;
+    }
 
     const isEditing = mode === "editing" && originalOrder;
     const endpoint = isEditing
@@ -190,8 +133,6 @@ export function OrderInfoModal({
       autoApplyPromos,
     };
 
-    console.log("--- FINAL PAYLOAD BEING SENT TO BACKEND ---");
-    console.log(JSON.stringify(orderData, null, 2));
 
     try {
       const response = await fetch(endpoint, {

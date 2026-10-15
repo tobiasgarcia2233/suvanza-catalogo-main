@@ -1,3 +1,4 @@
+import { cents, decimal, div, mul, rounded } from "./money";
 import type { CartItem } from "@/types";
 
 export const promotionId = (item: CartItem) => String(item.promoId ?? item.id);
@@ -22,7 +23,7 @@ export function sameComboQuantities(a: Record<string, number>, b: Record<string,
 export function comboContentsKey(item: CartItem): string {
   return JSON.stringify(item.includedItems?.map((included) => JSON.stringify([
     included.id, included.quantity, included.manualPercentage, included.manualPricePerUnit ?? null,
-    included.manualTotal, included.priceTiers,
+    included.manualTotal, included.priceTiers, included.promotionUnitPrice, item.promotionTotal,
   ])).sort());
 }
 
@@ -42,10 +43,11 @@ export function mergeComboRows(items: CartItem[]): CartItem[] {
     const compatible = new Map<string, CartItem>();
     groups.get(promotionId(row))!.forEach((part) => {
       const key = JSON.stringify([comboContentsKey(part), part.manualPercentage,
-        part.manualPricePerUnit ?? null, part.manualTotal]);
+        part.manualPricePerUnit ?? null, part.manualTotal == null ? null : part.manualTotal / part.quantity]);
       const previous = compatible.get(key);
       compatible.set(key, previous ? { ...previous, quantity: previous.quantity + part.quantity,
-        customTotal: (previous.customTotal ?? 0) + (part.customTotal ?? 0) } : part);
+        customTotal: (previous.customTotal ?? 0) + (part.customTotal ?? 0),
+        manualTotal: previous.manualTotal != null && part.manualTotal != null ? previous.manualTotal + part.manualTotal : null } : part);
     });
     const parts = [...compatible.values()];
     if (parts.length === 1) return parts[0];
@@ -85,7 +87,14 @@ export function resizeComboRow(item: CartItem, quantity: number): CartItem {
 }
 
 export function adjustComboRow(item: CartItem, adjustment: Partial<CartItem>): CartItem {
+  let cumulative = 0, allocated = 0;
   return { ...item, ...adjustment, ...(item.comboParts ? {
-    comboParts: item.comboParts.map((part) => ({ ...part, ...adjustment })),
+    comboParts: item.comboParts.map((part) => {
+      if (adjustment.manualTotal == null) return { ...part, ...adjustment };
+      cumulative += part.quantity;
+      const next = rounded(div(mul(decimal(cents(adjustment.manualTotal)),decimal(cumulative)),decimal(item.quantity)));
+      const total = (next - allocated)/100; allocated = next;
+      return { ...part, ...adjustment, manualTotal:total };
+    }),
   } : {}) };
 }

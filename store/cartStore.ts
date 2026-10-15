@@ -1,6 +1,8 @@
 // @ts-nocheck
 "use client";
 
+import { restorePricingCart } from "@/lib/restorePricingCart";
+import { agreedLineTotal, quantityPricingKey } from "@/lib/cartMoney";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
@@ -107,7 +109,6 @@ export function priceCart(
   keepCombos: boolean
 ): Pick<CartState, "items" | "subtotal" | "total" | "discountDetails"> {
   items = expandComboRows(items);
-  let finalTotal = 0;
   let finalSubtotal = 0;
   const finalDiscountDetails: DiscountDetail[] = [];
   let processedItems = [...items];
@@ -135,9 +136,10 @@ export function priceCart(
 
   const brandTotalQuantities = new Map<string, number>();
   processedItems.forEach((item) => {
-    if (!item.isPromo && item.brand) {
-      const currentTotal = brandTotalQuantities.get(item.brand) || 0;
-      brandTotalQuantities.set(item.brand, currentTotal + item.quantity);
+    if (!item.isPromo) {
+      const key = quantityPricingKey(item);
+      const currentTotal = brandTotalQuantities.get(key) || 0;
+      brandTotalQuantities.set(key, currentTotal + item.quantity);
     }
   });
 
@@ -146,22 +148,9 @@ export function priceCart(
   processedItems.forEach((item) => {
     if (item.isPromo) {
       const promoDefinition = getPromotions().find((p) => p.id === (item.promoId ?? item.id));
-      const basePromoPrice = promoDefinition
-        ? promoDefinition.totalPrice
-        : item.customTotal ?? 0;
+      const basePromoPrice = item.promotionTotal ?? promoDefinition?.totalPrice ?? (item.customTotal ?? 0) / item.quantity;
 
-      let effectivePromoPrice = basePromoPrice;
-      if (
-        item.manualPricePerUnit !== null &&
-        item.manualPricePerUnit !== undefined
-      ) {
-        effectivePromoPrice = item.manualPricePerUnit;
-      } else if (item.manualPercentage > 0) {
-        effectivePromoPrice = basePromoPrice * (1 - item.manualPercentage / 100);
-      }
-
-      const promoTotal = effectivePromoPrice * item.quantity;
-      finalTotal += promoTotal;
+      const promoTotal = agreedLineTotal(basePromoPrice,item);
       const promoSubtotal = item.includedItems!.reduce((sum, includedItem) => {
         const variantData = getProducts()
           .flatMap((p) => p.variants || [p])
@@ -194,7 +183,7 @@ export function priceCart(
         effectivePrice = basePrice - discount;
         discountLabel = `Descuento Manual (${item.manualPercentage}%)`;
       } else {
-        const totalQuantityForBrand = brandTotalQuantities.get(item.brand) || 0;
+        const totalQuantityForBrand = brandTotalQuantities.get(quantityPricingKey(item)) || 0;
         if (item.priceTiers) {
           for (const tier of item.priceTiers) {
             if (totalQuantityForBrand >= tier.minQuantity) {
@@ -209,9 +198,8 @@ export function priceCart(
       }
 
       const lineSubtotal = basePrice * item.quantity;
-      const lineTotal = effectivePrice * item.quantity;
+      const lineTotal = agreedLineTotal(item.manualPercentage > 0 ? basePrice : effectivePrice,item);
       finalSubtotal += lineSubtotal;
-      finalTotal += lineTotal;
 
       const discountAmount = lineSubtotal - lineTotal;
 
@@ -255,19 +243,7 @@ export function priceCart(
   const finalCartItems = processedItems.map((item) => {
     if (item.isPromo) {
       const promoDefinition = getPromotions().find((p) => p.id === (item.promoId ?? item.id));
-      const basePromoPrice = promoDefinition
-        ? promoDefinition.totalPrice
-        : item.customTotal ?? 0;
-
-      let effectivePromoPrice = basePromoPrice;
-      if (
-        item.manualPricePerUnit !== null &&
-        item.manualPricePerUnit !== undefined
-      ) {
-        effectivePromoPrice = item.manualPricePerUnit;
-      } else if (item.manualPercentage > 0) {
-        effectivePromoPrice = basePromoPrice * (1 - item.manualPercentage / 100);
-      }
+      const basePromoPrice = item.promotionTotal ?? promoDefinition?.totalPrice ?? (item.customTotal ?? 0) / item.quantity;
 
       const subtotalForItem =
         item.includedItems!.reduce((sum, i) => {
@@ -277,11 +253,11 @@ export function priceCart(
           const basePrice = variantData?.priceTiers?.[0]?.pricePerUnit || 0;
           return sum + basePrice * i.quantity;
         }, 0) * item.quantity;
-      const totalForItem = effectivePromoPrice * item.quantity;
+      const totalForItem = agreedLineTotal(basePromoPrice,item);
       const discount = subtotalForItem - totalForItem;
       return {
         ...item,
-        customTotal: totalForItem,
+        customTotal: Math.round(totalForItem * 100) / 100,
         discountPercentage:
           subtotalForItem > 0 ? (discount / subtotalForItem) * 100 : 0,
       };
@@ -298,7 +274,7 @@ export function priceCart(
       const discount = basePrice * (item.manualPercentage / 100);
       effectivePrice = basePrice - discount;
     } else {
-      const totalQuantityForBrand = brandTotalQuantities.get(item.brand) || 0;
+      const totalQuantityForBrand = brandTotalQuantities.get(quantityPricingKey(item)) || 0;
       if (item.priceTiers) {
         for (const tier of item.priceTiers) {
           if (totalQuantityForBrand >= tier.minQuantity) {
@@ -307,12 +283,13 @@ export function priceCart(
         }
       }
     }
-    const lineTotal = effectivePrice * item.quantity;
+    const lineTotal = agreedLineTotal(item.manualPercentage > 0 ? basePrice : effectivePrice,item);
     const lineSubtotal = basePrice * item.quantity;
     const discount = lineSubtotal - lineTotal;
     return {
       ...item,
-      customTotal: lineTotal,
+      tierQuantity: brandTotalQuantities.get(quantityPricingKey(item)) || item.quantity,
+      customTotal: Math.round(lineTotal * 100) / 100,
       discountPercentage:
         lineSubtotal > 0 ? (discount / lineSubtotal) * 100 : 0,
     };
@@ -326,8 +303,8 @@ export function priceCart(
       cartLineKey: finalCartItems.some((other, otherIndex) => otherIndex !== index && other.id === item.id)
         ? `line:${item.id}:${index}` : undefined,
     }))),
-    subtotal: finalSubtotal,
-    total: finalTotal,
+    subtotal: Math.round(finalSubtotal * 100) / 100,
+    total: finalCartItems.reduce((sum, item) => sum + Math.round((item.customTotal ?? 0) * 100), 0) / 100,
     discountDetails: finalDiscountDetails,
   };
 }
@@ -541,7 +518,7 @@ export const useCartStore = create(
           mode: "editing",
           editSellerSlug: sellerSlug ?? null,
         });
-        set(recalculateAndSetState(loadedItems));
+        set(recalculateAndSetState(restorePricingCart(loadedItems,order)));
       },
 
       addMultipleToCart: (parentProduct, quantities) => {
@@ -620,7 +597,9 @@ export const useCartStore = create(
         const promoVariantIds = new Set<string>();
 
         promotion.items.forEach((promoItem) => {
-          const result = findProductForPromoItem(promoItem.name);
+          const exactParent = getProducts().find(p => p.variants?.some(v => v.id === promoItem.id));
+          const exactVariant = exactParent?.variants?.find(v => v.id === promoItem.id);
+          const result = exactParent && exactVariant ? {parentProduct:exactParent,variant:exactVariant} : findProductForPromoItem(promoItem.name);
           if (!result) return;
           const { parentProduct, variant } = result;
           promoVariantIds.add(variant.id as string);
@@ -632,6 +611,7 @@ export const useCartStore = create(
             imageUrls: variant.imageUrls || parentProduct.imageUrls,
             variants: [],
             quantity: promoItem.quantity,
+            promotionUnitPrice: promoItem.pricePerUnit,
             customTotal: null,
             discountPercentage: 0,
             manualTotal: null,
@@ -651,7 +631,7 @@ export const useCartStore = create(
 
         const existingIndex = currentItems.findIndex(
           (item) => item.isPromo && promotionId(item) === String(promotion.id) &&
-            comboContentsKey(item) === comboContentsKey({ includedItems } as CartItem)
+            comboContentsKey(item) === comboContentsKey({ includedItems, promotionTotal: promotion.totalPrice } as CartItem)
         );
 
         if (existingIndex > -1) {
@@ -666,6 +646,7 @@ export const useCartStore = create(
           currentItems.push({
             id: bundleId,
             promoId: promotion.id,
+            promotionTotal: promotion.totalPrice,
             name: promotion.title,
             brand: "Promoción",
             priceTiers: [],
@@ -702,7 +683,7 @@ export const useCartStore = create(
       setItemManualDiscountPercentage: (itemId, percentage) => {
         const updatedItems = get().items.map((item) =>
           (item.cartLineKey ?? item.id) === itemId
-            ? adjustComboRow(item, { manualPercentage: percentage ?? 0, manualTotal: null })
+            ? adjustComboRow(item, { manualPercentage: percentage ?? 0, manualTotal: null, manualPricePerUnit: null })
             : item
         );
         set(recalculateAndSetState(updatedItems));
@@ -711,7 +692,7 @@ export const useCartStore = create(
       setItemManualTotal: (itemId, total) => {
         const updatedItems = get().items.map((item) =>
           (item.cartLineKey ?? item.id) === itemId
-            ? adjustComboRow(item, { manualTotal: total, manualPercentage: 0 })
+            ? adjustComboRow(item, { manualTotal: total, manualPercentage: 0, manualPricePerUnit: null })
             : item
         );
         set(recalculateAndSetState(updatedItems));

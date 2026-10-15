@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, X, XCircle } fro
 import { usePauseRefresh } from "@/store/refreshGuardStore";
 import { CUSTOMER_REVIEW_MESSAGE, type BuyerData } from "@/lib/customerReview";
 import type { ExportProgress } from "@/lib/odooExport";
-import { displayExportError, EXPORT_MIGRATION_MESSAGE } from "@/lib/odooExportStatus";
+import { displayExportError, EXPORT_MIGRATION_MESSAGE, canRecoverPricingOnRetry, exportErrorDetail, canRecompareCustomer } from "@/lib/odooExportStatus";
 import { useOdooExport } from "./useOdooExport";
 
 type Tone = "info" | "success" | "warning" | "error";
@@ -21,6 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: "Pendiente de envío",
   processing: "Enviando",
   error: "Error",
+  pricing_review: "Revisar precios originales",
   review: "Requiere conciliación",
   customer_review: "Revisar datos del cliente",
   customer_selection: "Elegir cliente",
@@ -33,6 +34,10 @@ function guide(progress: ExportProgress | null): { tone: Tone; title: string; te
   if (!progress) {
     return { tone: "info", title: "Sin exportación automática", text: "Este pedido no tiene registro en la cola de exportación a Odoo, así que se gestiona de forma manual." };
   }
+  if (canRecoverPricingOnRetry(progress)) return {tone:'info',title:'Pendiente de reintento',text:''};
+  if (progress.status === 'pricing_review') return {
+    tone:'warning',title:'Requiere revisar los precios originales',text:'',
+  };
   switch (progress.status) {
     case "pending":
       return { tone: "info", title: "Pendiente de envío", text: "El pago está confirmado y el pedido todavía no se envió a Odoo." };
@@ -135,7 +140,7 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
 
   const review = progress?.status === "customer_review" && !progress.quotation_id ? progress.customer_review : undefined;
   const candidates = progress?.status === "customer_selection" ? progress.candidates ?? [] : [];
-  const detail = error || (progress?.error && progress.error !== CUSTOMER_REVIEW_MESSAGE ? progress.error : "");
+  const detail = error || (exportErrorDetail(progress) !== CUSTOMER_REVIEW_MESSAGE ? exportErrorDetail(progress) : "");
   const staleComparison = !!progress?.error && !progress.error.startsWith(CUSTOMER_REVIEW_MESSAGE);
   const { tone, title, text } = guide(progress);
   const { box, icon: Icon } = TONES[tone];
@@ -154,7 +159,7 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
           void send({ action: "correct", revision: formRevision, buyer: form, preserveResolvedContact: true });
         }}
       >
-        <p className="font-semibold">Corregir datos del pedido</p>
+        <p className="font-semibold">Corregir datos del comprador</p>
         <p className="text-gray-600">
           Se conservan los datos originales, el pago y los importes. El contacto existente en Odoo no se modifica. Se
           repetirá la búsqueda del cliente; si no existe, se podrá crear uno nuevo.
@@ -285,7 +290,7 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
           </p>
           <button
             className={primaryButton}
-            disabled={blocked || !!progress?.phase?.endsWith("creating")}
+            disabled={blocked || !canRecompareCustomer(progress)}
             onClick={() => void recompare()}
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -332,12 +337,12 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
           {action && (
             <button className={primaryButton} disabled={blocked} onClick={() => send()}>
               {busy && <Loader2 size={14} className="animate-spin" />}
-              {action === "reconcile" ? "Conciliar con Odoo" : progress?.status === "pending" ? "Enviar a Odoo" : "Reintentar exportación"}
+              {action === "reconcile" ? "Reconciliar con Odoo" : progress?.status === "pending" ? "Enviar a Odoo" : "Reintentar exportación"}
             </button>
           )}
           {canCorrect && (
             <button className={secondaryButton} disabled={blocked} onClick={startCorrection}>
-              Corregir datos del pedido
+              Corregir datos del comprador
             </button>
           )}
           {review && (
@@ -351,7 +356,7 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
       {progress && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-gray-50 p-4">
           <dt className="text-gray-500">Estado</dt>
-          <dd>{STATUS_LABELS[progress.status] ?? progress.status}</dd>
+          <dd>{canRecoverPricingOnRetry(progress) ? "Pendiente de reintento" : STATUS_LABELS[progress.status] ?? progress.status}</dd>
           <dt className="text-gray-500">Presupuesto</dt>
           <dd>
             {progress.quotation_ref ?? "—"}
