@@ -1,3 +1,4 @@
+import { activeOrderSql } from "./orderDeletion";
 import "server-only";
 import { db } from "./db";
 import { CLOSED_SALE_SQL } from "./orderQueries";
@@ -95,7 +96,7 @@ export async function getContextMetrics(
                 SUM(CASE WHEN o.status = 'PENDING_PAYMENT' THEN o.total ELSE 0 END) AS pendingAmount,
                 SUM(CASE WHEN o.status = 'ODOO_ERROR' THEN 1 ELSE 0 END) AS odooErrors
               FROM orders o
-              WHERE ${where}
+              WHERE ${activeOrderSql("o")} AND ${where}
               GROUP BY o.seller_name`,
         args,
       },
@@ -113,7 +114,7 @@ export async function getContextMetrics(
               FROM orders o, json_each(o.items) j
               LEFT JOIN variants v ON v.id = j.value->>'id'
               LEFT JOIN products p ON p.id = COALESCE(v.product_id, j.value->>'id')
-              WHERE ${where} AND o.status IN (${CLOSED_SALE_SQL})
+              WHERE ${activeOrderSql("o")} AND ${where} AND o.status IN (${CLOSED_SALE_SQL})
               GROUP BY o.seller_name, COALESCE(p.id, j.value->>'id')`,
         args,
       },
@@ -123,7 +124,7 @@ export async function getContextMetrics(
                 MAX(j.value->>'title') AS title,
                 SUM(j.value->>'quantity') AS quantity
               FROM orders o, json_each(o.promos_sold) j
-              WHERE ${where} AND o.status IN (${CLOSED_SALE_SQL}) AND o.promos_sold IS NOT NULL
+              WHERE ${activeOrderSql("o")} AND ${where} AND o.status IN (${CLOSED_SALE_SQL}) AND o.promos_sold IS NOT NULL
               GROUP BY o.seller_name, j.value->>'id'`,
         args,
       },

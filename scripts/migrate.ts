@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@libsql/client";
+import { migrateOrderDeletion } from "../db/orderDeletionMigration";
 import { migrateOdooExports } from "../db/odooExportMigration";
 import { migrateOdooProductLink } from "../db/odooProductMigration";
 import { realProducts, allCrossPromotions } from "../lib/product-data";
@@ -30,6 +31,7 @@ async function applySchema() {
   if (pendingOdooLinks.length) console.table(pendingOdooLinks);
 
   await migrateOdooExports(db);
+  await migrateOrderDeletion(db);
 
   // Backfill the product ↔ category join table from the old single-category
   // column, then drop it. Safe to run repeatedly: no-op once the column is gone.
