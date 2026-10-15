@@ -104,17 +104,20 @@ export function OrderRow({ order, eventName }: OrderRowProps) {
     setMenuOpen(false);
     openConfirmationModal({
       title: "Confirmar Eliminación",
-      message: `¿Eliminar la orden de ${order.buyer_details.name}?`,
+      message: `¿Eliminar la orden de ${order.buyer_details.name}? Este pedido se quitará del catálogo. Si ya fue enviado a Odoo, seguirá existiendo allí. Esta acción no anula el cobro. Si hay una exportación en curso, una solicitud ya enviada a Odoo puede completarse igualmente.`,
       onConfirm: async () => {
         setBusy("deleting");
         try {
           const res = await fetch(`/api/orders/${order.id}`, {
             method: "DELETE",
           });
-          if (!res.ok) throw new Error();
+          if (!res.ok) {
+            const data = await res.json().catch(()=>null);
+            throw new Error(data?.message || "No se pudo eliminar. Intentá nuevamente.");
+          }
           startTransition(() => router.refresh());
-        } catch {
-          alert("No se pudo eliminar.");
+        } catch (error) {
+          alert(error instanceof Error ? error.message : "No se pudo eliminar.");
           setBusy(null);
         }
       },

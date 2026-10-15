@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "./db";
+import { activeOrderSql, requireActiveOrder, OrderActionError, softDeleteOrder } from "./orderDeletion";
 import { snapshotOrder } from "./odooExport";
 import { ODOO_QUEUE_STATUSES, type Order, type OrderPayment } from "@/types";
 
@@ -104,7 +105,7 @@ export async function fetchRecentOrders(
   endDate?: string,
   filters: { event?: string; status?: OrderStatusFilter } = {},
 ): Promise<Order[]> {
-  const conditions: string[] = [];
+  const conditions: string[] = [activeOrderSql()];
   const args: (string | number)[] = [];
 
   const byEvent = eventCondition(filters.event);
@@ -165,7 +166,7 @@ export async function getOrdersPulse(): Promise<{
     `SELECT COUNT(*) AS count,
             MAX(created_at) AS latest,
             COALESCE(SUM(CASE WHEN status IN (${CLOSED_SALE_SQL}) THEN 1 ELSE 0 END), 0) AS paid
-     FROM orders`,
+     FROM orders WHERE ${activeOrderSql()}`,
   );
   const row = res.rows[0] as unknown as {
     count: number | bigint;
@@ -187,7 +188,7 @@ export async function fetchOrdersBySeller(
   // Unlike the admin dashboards, this keeps every order for the seller —
   // completed sales stay visible permanently instead of disappearing once
   // they're paid or sent to Odoo.
-  const conditions = ["LOWER(seller_name) = LOWER(?)"];
+  const conditions = [activeOrderSql(), "LOWER(seller_name) = LOWER(?)"];
   const args: string[] = [sellerName];
   if (eventId === null) {
     conditions.push("event_id IS NULL");
@@ -204,9 +205,9 @@ export async function fetchOrdersBySeller(
   return (res.rows as unknown as OrderRow[]).map(rowToOrder);
 }
 
-export async function getOrder(id: string): Promise<Order | null> {
+export async function getOrder(id: string, includeDeleted = false): Promise<Order | null> {
   const res = await db.execute({
-    sql: "SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE id = ?",
+    sql: `SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE id = ? ${includeDeleted ? "" : `AND ${activeOrderSql()}`}`,
     args: [id],
   });
   if (res.rows.length === 0) return null;
@@ -312,16 +313,17 @@ export async function updateOrder(
     args.push(null);
   }
 
+  await requireActiveOrder(id);
   if (updates.length === 0) return;
   args.push(id);
   const commercial = patch.items !== undefined || patch.total !== undefined || patch.buyer_details !== undefined;
   const transaction = await db.transaction("write");
   try {
     const result = await transaction.execute({
-      sql: `UPDATE orders SET ${updates.join(", ")} WHERE id = ? ${commercial ? "AND status = 'PENDING_PAYMENT' AND odoo_sent_at IS NULL AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)" : ""}`,
+      sql: `UPDATE orders SET ${updates.join(", ")} WHERE id = ? AND ${activeOrderSql()} ${commercial ? "AND status = 'PENDING_PAYMENT' AND odoo_sent_at IS NULL AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)" : ""}`,
       args,
     });
-    if (!result.rowsAffected) throw new Error("Pedido inexistente o datos comerciales bloqueados por cobro/exportación.");
+    if (!result.rowsAffected) throw new OrderActionError("Pedido eliminado, inexistente o datos comerciales bloqueados por cobro/exportación.");
     if (patch.status === "COMPLETED") {
       const row = (await transaction.execute({sql:"SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE id = ?",args:[id]})).rows[0];
       if (!row.odoo_sent_at && row.status !== "ODOO_SENT") {
@@ -333,9 +335,8 @@ export async function updateOrder(
   } finally { transaction.close(); }
 }
 
-export async function deleteOrder(id: string): Promise<void> {
-  const result = await db.execute({ sql: "DELETE FROM orders WHERE id = ? AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)", args: [id] });
-  if (!result.rowsAffected) throw new Error("No se puede eliminar un pedido con historial de exportación Odoo.");
+export async function deleteOrder(id: string, actor: string, sellerOnly = false): Promise<void> {
+  await softDeleteOrder(id,actor,sellerOnly);
 }
 
 export async function fetchOrdersForOdoo(options: {
@@ -348,6 +349,7 @@ export async function fetchOrdersForOdoo(options: {
   // sending (never sent, or the last attempt failed); includeSent adds the
   // ones already in Odoo.
   const conditions: string[] = [
+    activeOrderSql(),
     options.includeSent
       ? `status IN (${CLOSED_SALE_SQL})`
       : `status IN (${ODOO_QUEUE_STATUSES.map((s) => `'${s}'`).join(", ")})`,
@@ -384,7 +386,7 @@ export async function getSellerSalesStats(
   // even if the same buyer ordered more than once.
   const res = await db.execute({
     sql: `SELECT items FROM orders
-          WHERE LOWER(seller_name) = LOWER(?) AND status IN (${CLOSED_SALE_SQL})`,
+          WHERE ${activeOrderSql()} AND LOWER(seller_name) = LOWER(?) AND status IN (${CLOSED_SALE_SQL})`,
     args: [sellerName],
   });
 
@@ -412,14 +414,14 @@ export async function setOdooResult(ids: string[], result: OdooResult): Promise<
     await db.execute({
       sql: `UPDATE orders
             SET status = 'ODOO_SENT', odoo_sent_at = ?, odoo_ref = ?, odoo_error = NULL
-            WHERE id IN (${placeholders}) AND status IN (${queue}) AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
+            WHERE ${activeOrderSql()} AND id IN (${placeholders}) AND status IN (${queue}) AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
       args: [new Date().toISOString(), result.ref ?? null, ...ids],
     });
   } else {
     await db.execute({
       sql: `UPDATE orders
             SET status = 'ODOO_ERROR', odoo_error = ?
-            WHERE id IN (${placeholders}) AND status IN (${queue}) AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
+            WHERE ${activeOrderSql()} AND id IN (${placeholders}) AND status IN (${queue}) AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
       args: [result.error, ...ids],
     });
   }
@@ -432,7 +434,7 @@ export async function resetOdooSent(ids: string[]): Promise<void> {
   await db.execute({
     sql: `UPDATE orders
           SET status = 'COMPLETED', odoo_sent_at = NULL, odoo_ref = NULL, odoo_error = NULL
-          WHERE id IN (${placeholders}) AND status = 'ODOO_SENT' AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
+          WHERE ${activeOrderSql()} AND id IN (${placeholders}) AND status = 'ODOO_SENT' AND NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id)`,
     args: ids,
   });
 }

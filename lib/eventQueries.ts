@@ -1,3 +1,4 @@
+import { activeOrderSql } from "./orderDeletion";
 import "server-only";
 import type { InStatement } from "@libsql/client";
 import { db } from "./db";
@@ -68,7 +69,7 @@ export async function getAllEvents(): Promise<SalesEventSummary[]> {
      LEFT JOIN (
        SELECT event_id, COUNT(*) AS salesCount, SUM(total) AS salesTotal
        FROM orders
-       WHERE event_id IS NOT NULL AND status IN (${CLOSED_SALE_SQL})
+       WHERE ${activeOrderSql()} AND event_id IS NOT NULL AND status IN (${CLOSED_SALE_SQL})
        GROUP BY event_id
      ) s ON s.event_id = e.id
      ORDER BY CASE e.status WHEN 'active' THEN 0 ELSE 1 END, e.created_at DESC`,

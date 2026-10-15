@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { OrderActionError } from "@/lib/orderDeletion";
 import { deleteOrder, updateOrder, getOrder } from "@/lib/orderQueries";
 import { getSellerBySlug } from "@/lib/sellerQueries";
 import { readSessionFromCookie } from "@/lib/auth";
@@ -157,7 +158,7 @@ export async function PATCH(
     const odooExport = patch.status === "COMPLETED" ? await exportPaidOrder(orderId) : undefined;
     return NextResponse.json({ message: "Order updated", odooExport });
   } catch (error) {
-    if (error instanceof EventOrderError) {
+    if (error instanceof EventOrderError || error instanceof OrderActionError) {
       return NextResponse.json({ message: error.message }, { status: error.status });
     }
     console.error("PATCH /api/orders/[orderId] error:", error);
@@ -176,6 +177,7 @@ export async function DELETE(
     const { orderId } = await context.params;
     const sellerSlug = request.nextUrl.searchParams.get("sellerSlug");
 
+    let actor: string;
     if (sellerSlug) {
       // Unauthenticated seller deleting their own order: verify the slug is
       // whitelisted and the order actually belongs to that seller and hasn't
@@ -184,7 +186,7 @@ export async function DELETE(
       if (!seller) {
         return NextResponse.json({ message: "Link de ventas no encontrado." }, { status: 404 });
       }
-      const order = await getOrder(orderId);
+      const order = await getOrder(orderId,true);
       if (!order || order.seller_name.toLowerCase() !== seller.name.toLowerCase()) {
         return NextResponse.json({ message: "Pedido no encontrado." }, { status: 404 });
       }
@@ -194,6 +196,7 @@ export async function DELETE(
           { status: 403 },
         );
       }
+      actor = `seller:${seller.id}`;
       if (order.event_id) {
         await assertSellerEventOrder({ eventId: order.event_id, sellerId: seller.id });
       }
@@ -202,12 +205,13 @@ export async function DELETE(
       if (!session) {
         return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
       }
+      actor = session.sub;
     }
 
-    await deleteOrder(orderId);
+    await deleteOrder(orderId,actor,!!sellerSlug);
     return NextResponse.json({ message: "Deleted" });
   } catch (error) {
-    if (error instanceof EventOrderError) {
+    if (error instanceof EventOrderError || error instanceof OrderActionError) {
       return NextResponse.json({ message: error.message }, { status: error.status });
     }
     console.error("DELETE /api/orders/[orderId] error:", error);
