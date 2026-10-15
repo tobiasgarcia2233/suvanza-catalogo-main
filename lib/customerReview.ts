@@ -26,8 +26,66 @@ export type CustomerReviewAction =
   | { kind: 'defer'; actor: string; revision: number };
 
 export const CUSTOMER_REVIEW_MESSAGE = 'Pedido pagado. Revisar datos del cliente antes de enviar a Odoo.';
+/** Accent-, case- and punctuation-insensitive: "Ramírez" = "ramirez", "D'Angelo" = "d angelo". */
 export function normalizedName(value: string): string {
-  return value.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+// Connectors that are often dropped when a name is typed in a hurry.
+const NAME_PARTICLES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'e', 'da', 'das', 'do', 'dos', 'di', 'van', 'von', 'der']);
+
+function nameTokens(value: string): string[] {
+  return normalizedName(value).split(' ').filter(token => token && !NAME_PARTICLES.has(token));
+}
+
+/** At most one insertion, deletion or substitution apart. */
+function withinOneEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (a.length < b.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** Same word, an initial of it ("J" ~ "Julieta"), or a one-letter typo in a long word. */
+function sameNameToken(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length === 1 || b.length === 1) return a[0] === b[0];
+  return Math.min(a.length, b.length) >= 5 && withinOneEdit(a, b);
+}
+
+/**
+ * Whether two names plausibly belong to the same person, once the document
+ * already matched. Tolerates accents, case, punctuation, connectors, word
+ * order, initials, one-letter typos and missing words: every word of the
+ * shorter name must pair with a distinct word of the longer one. A partial
+ * name needs at least two full words in common ("Julieta Ramírez" ~ "Julieta
+ * Ramírez Bermejo"); a lone first name is not enough to confirm the person.
+ */
+export function namesMatch(a: string, b: string): boolean {
+  const x = nameTokens(a), y = nameTokens(b);
+  if (!x.length || !y.length) return x.length === y.length;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  const pool = [...long];
+  const pending: string[] = [];
+  // Exact words first, so a fuzzy pairing never steals another word's exact match.
+  for (const token of short) {
+    const index = pool.indexOf(token);
+    if (index >= 0) pool.splice(index, 1);
+    else pending.push(token);
+  }
+  for (const token of pending) {
+    const index = pool.findIndex(candidate => sameNameToken(token, candidate));
+    if (index < 0) return false;
+    pool.splice(index, 1);
+  }
+  const fullWords = short.filter(token => token.length > 1).length;
+  return fullWords >= (short.length === long.length ? 1 : 2);
 }
 /** Conservative formatting comparison: no fuzzy identities or suffix matching. */
 export function normalizedPhone(value: string, countryCode = ''): string {

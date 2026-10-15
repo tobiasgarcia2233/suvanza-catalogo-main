@@ -105,12 +105,19 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<BuyerData>({ name: "", dni: "", phone: "" });
   const [formRevision, setFormRevision] = useState(0);
+  const [recompared, setRecompared] = useState(false);
 
   async function send(body: Record<string, unknown> = {}) {
+    setRecompared(false);
     const result = await post(body);
     if (!result) return;
     onChanged();
     if (body.action === "correct" && result.next?.customer_revision !== formRevision) setEditing(false);
+    return result;
+  }
+  /** Plain retry: compares again with the current rules and, if nothing differs, sends. */
+  async function recompare() {
+    if (await send()) setRecompared(true);
   }
   function startCorrection() {
     setForm(progress?.customer_buyer ?? { name: "", dni: "", phone: "" });
@@ -129,6 +136,7 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
   const review = progress?.status === "customer_review" && !progress.quotation_id ? progress.customer_review : undefined;
   const candidates = progress?.status === "customer_selection" ? progress.candidates ?? [] : [];
   const detail = error || (progress?.error && progress.error !== CUSTOMER_REVIEW_MESSAGE ? progress.error : "");
+  const staleComparison = !!progress?.error && !progress.error.startsWith(CUSTOMER_REVIEW_MESSAGE);
   const { tone, title, text } = guide(progress);
   const { box, icon: Icon } = TONES[tone];
   const buyer = progress?.customer_buyer;
@@ -267,6 +275,46 @@ function OdooPanel({ orderId, onChanged, onClose }: { orderId: string; onChanged
             </li>
           ))}
         </ul>
+      )}
+
+      {review && (
+        <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+          <p className="text-gray-600">
+            Si esta revisión quedó de antes, volvé a comparar con los datos actuales de Odoo. Si ya no hay diferencias,
+            el pedido se envía a Odoo en el mismo paso.
+          </p>
+          <button
+            className={primaryButton}
+            disabled={blocked || !!progress?.phase?.endsWith("creating")}
+            onClick={() => void recompare()}
+          >
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Volver a comparar y enviar
+          </button>
+          {/* A fresh comparison always saves an error starting with CUSTOMER_REVIEW_MESSAGE.
+              Any other error means the retry failed before comparing, so the
+              comparison shown is the stored one, not a new result. */}
+          {recompared && progress?.status === "customer_review" && staleComparison && (
+            <p className="font-medium text-red-700">
+              No se pudo volver a comparar: {displayExportError(progress.error)} La comparación de abajo es la anterior.
+              Resolvé ese problema y volvé a intentar.
+            </p>
+          )}
+          {recompared && progress?.status === "customer_review" && !staleComparison && (
+            <p className="font-medium text-orange-800">
+              Sigue habiendo diferencias en:{" "}
+              {[
+                review.differences.name && "nombre",
+                review.differences.document && "documento",
+                review.differences.phone && "teléfono",
+                !review.remote.active && "cliente archivado en Odoo",
+              ]
+                .filter(Boolean)
+                .join(", ")}
+              . Elegí cómo resolverlas con las opciones de abajo.
+            </p>
+          )}
+        </div>
       )}
 
       {(review || action || canCorrect) && (
