@@ -90,20 +90,11 @@ function eventCondition(event: string | undefined): { sql: string; args: string[
   return { sql: "event_id = ?", args: [event] };
 }
 
-/** Admin dashboard filter by order status. */
-export type OrderStatusFilter = "pending" | "paid" | "odoo_error";
-
-const STATUS_CONDITIONS: Record<OrderStatusFilter, string> = {
-  pending: "status = 'PENDING_PAYMENT'",
-  paid: `status IN (${CLOSED_SALE_SQL})`,
-  odoo_error: "status = 'ODOO_ERROR'",
-};
-
 export async function fetchRecentOrders(
   query?: string,
   startDate?: string,
   endDate?: string,
-  filters: { event?: string; status?: OrderStatusFilter } = {},
+  filters: { event?: string } = {},
 ): Promise<Order[]> {
   const conditions: string[] = [activeOrderSql()];
   const args: (string | number)[] = [];
@@ -112,9 +103,6 @@ export async function fetchRecentOrders(
   if (byEvent) {
     conditions.push(byEvent.sql);
     args.push(...byEvent.args);
-  }
-  if (filters.status && STATUS_CONDITIONS[filters.status]) {
-    conditions.push(STATUS_CONDITIONS[filters.status]);
   }
 
   if (startDate && endDate) {

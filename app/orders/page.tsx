@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { readSessionFromCookie } from "@/lib/auth";
-import { fetchRecentOrders, type OrderStatusFilter } from "@/lib/orderQueries";
+import { fetchRecentOrders } from "@/lib/orderQueries";
 import { getEventOptions } from "@/lib/eventQueries";
 import { OrdersPageClient } from "./OrdersPageClient";
 import { Suspense } from "react";
@@ -16,22 +16,20 @@ export default async function OrdersDashboardPage({
     startDate?: string;
     endDate?: string;
     event?: string;
-    status?: string;
   }>;
 }) {
   const session = await readSessionFromCookie();
   if (!session) redirect("/?next=/orders");
 
-  const { q, startDate, endDate, event, status } = await searchParams;
+  // "status" is also in the URL, but it's a client-side tab over these orders
+  // (see SearchableOrderList), so it doesn't trigger a refetch.
+  const { q, startDate, endDate, event } = await searchParams;
 
   // Only the orders list is fetched here, so router.refresh() (polling or after
   // creating a sale) stays cheap. The product catalog needed by "Nuevo pedido"
   // is loaded once, client-side, in OrdersPageClient.
   const [initialOrders, events] = await Promise.all([
-    fetchRecentOrders(q || "", startDate, endDate, {
-      event,
-      status: status as OrderStatusFilter | undefined,
-    }),
+    fetchRecentOrders(q || "", startDate, endDate, { event }),
     getEventOptions(),
   ]);
 

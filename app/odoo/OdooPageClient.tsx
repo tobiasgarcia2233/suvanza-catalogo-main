@@ -316,7 +316,7 @@ function OrderCard({
           </div>
         </div>
 
-        <OdooExportStatus onRetryAllowed={onRetryAllowed} orderId={order.id} legacySent={order.status === "ODOO_SENT" || !!order.odoo_sent_at} />
+        <OdooExportStatus onRetryAllowed={onRetryAllowed} orderId={order.id} buyerName={order.buyer_details.name} legacySent={order.status === "ODOO_SENT" || !!order.odoo_sent_at} />
 
         {hasOdooError && order.odoo_error && (
           <div className="mb-3 flex items-start gap-2 rounded-md bg-red-50 border border-red-100 px-3 py-1.5 text-sm text-red-900">

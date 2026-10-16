@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { readSessionFromCookie } from '@/lib/auth';
 import { exportPaidOrder, getExport } from '@/lib/odooExport';
 import { EXPORT_MIGRATION_MESSAGE } from '@/lib/odooExportStatus';
-import type { CustomerReviewAction } from '@/lib/customerReview';
+import { PARTNER_UPDATE_FIELDS, type CustomerReviewAction, type PartnerUpdateField } from '@/lib/customerReview';
 export async function GET(_request: Request, context: { params: Promise<{orderId:string}> }) {
   if (!await readSessionFromCookie()) return NextResponse.json({message:'No autorizado'},{status:401});
   try {
@@ -46,11 +46,16 @@ export async function POST(request: Request, context: { params: Promise<{orderId
   if (body.partnerId !== undefined && (!Number.isSafeInteger(body.partnerId) || body.partnerId <= 0)) return NextResponse.json({message:'Cliente inválido'},{status:400});
   let action: CustomerReviewAction | undefined;
   if (body.action !== undefined) {
-    if (!['approve','correct','defer'].includes(body.action) || !Number.isSafeInteger(body.revision) || body.revision < 0) return NextResponse.json({message:'Revisión inválida'},{status:400});
+    if (!['approve','correct','defer','update_partner'].includes(body.action) || !Number.isSafeInteger(body.revision) || body.revision < 0) return NextResponse.json({message:'Revisión inválida'},{status:400});
     const base = {actor:session.sub,revision:body.revision};
     if (body.action === 'approve') {
       if (!body.partnerId || typeof body.token !== 'string' || !/^[a-f0-9]{64}$/.test(body.token)) return NextResponse.json({message:'Comparación inválida'},{status:400});
       action = {...base,kind:'approve',token:body.token,partnerId:body.partnerId};
+    } else if (body.action === 'update_partner') {
+      if (!body.partnerId || typeof body.token !== 'string' || !/^[a-f0-9]{64}$/.test(body.token)) return NextResponse.json({message:'Comparación inválida'},{status:400});
+      const fields = Array.isArray(body.fields) ? [...new Set(body.fields)] : [];
+      if (!fields.length || !fields.every(f => PARTNER_UPDATE_FIELDS.includes(f as PartnerUpdateField))) return NextResponse.json({message:'Elegí nombre y/o teléfono para actualizar.'},{status:400});
+      action = {...base,kind:'update_partner',token:body.token,partnerId:body.partnerId,fields:fields as PartnerUpdateField[],approveRest:body.approveRest === true};
     } else if (body.action === 'correct') {
       action = {...base,kind:'correct',buyer:body.buyer,preserveResolvedContact:body.preserveResolvedContact === true};
     } else action = {...base,kind:'defer'};
