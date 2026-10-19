@@ -35,7 +35,7 @@ export default function ContextMetricsView({ metrics }: { metrics: ContextMetric
             <p className="flex items-center gap-1">
               <TriangleAlert size={14} /> {metrics.odooErrors} venta
               {metrics.odooErrors === 1 ? "" : "s"} con error al enviar a Odoo.{" "}
-              <Link href="/odoo" className="font-semibold underline">
+              <Link href="/orders?status=attention" className="font-semibold underline">
                 Revisar
               </Link>
             </p>

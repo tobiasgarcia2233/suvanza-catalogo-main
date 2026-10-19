@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isClosedSale, type Order } from "@/types";
 import { OrderRow } from "./OrderRow";
-import { Loader2, Search, X } from "lucide-react";
+import { Loader2, RefreshCw, Search, X } from "lucide-react";
 import { isRefreshPaused } from "@/store/refreshGuardStore";
 import type { EventOption } from "@/lib/eventQueries";
 import { EventCombobox } from "./EventCombobox";
@@ -12,8 +12,16 @@ import { DISPLAY_STATUS_META, orderDisplayStatus } from "@/lib/orderDisplayStatu
 
 interface SearchableOrderListProps {
   initialOrders: Order[];
+  /** Paid orders whose Odoo export needs action, of any date (see fetchRecentOrders). */
+  attentionOrders: Order[];
   events: EventOption[];
 }
+
+// The bulk route accepts up to 20 ids per request.
+const RETRY_BATCH = 20;
+
+const needsDecision = (o: Order) =>
+  DISPLAY_STATUS_META[orderDisplayStatus(isClosedSale(o.status), o.odoo_export_status)].attention;
 
 type StatusTab = "" | "pending" | "paid" | "attention";
 type Period = "default" | "today" | "7d" | "month" | "custom";
@@ -57,7 +65,7 @@ const formatDay = (iso: string) => {
   return `${d}/${m}/${y.slice(2)}`;
 };
 
-export function SearchableOrderList({ initialOrders, events }: SearchableOrderListProps) {
+export function SearchableOrderList({ initialOrders, attentionOrders, events }: SearchableOrderListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -75,6 +83,8 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
   const [period, setPeriod] = useState<Period>(() => detectPeriod(urlStart, urlEnd));
   const [customStart, setCustomStart] = useState(urlStart);
   const [customEnd, setCustomEnd] = useState(urlEnd);
+  const [retrying, setRetrying] = useState(false);
+  const [retryResult, setRetryResult] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
 
   // Keep the controls in step with the URL (back/forward, chips, "Limpiar").
   // A half-filled custom range has no URL yet, so it isn't reset.
@@ -191,10 +201,11 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
   }, [router, hasDateFilter]);
 
   // Totals and tab counts always cover every loaded order, so they don't
-  // change when switching tabs.
+  // change when switching tabs. "Requiere atención" comes from the server
+  // without the period limit.
   const { totals, counts, byTab } = useMemo(() => {
     const totals = { grand: 0, paid: 0, pending: 0 };
-    const byTab: Record<StatusTab, Order[]> = { "": [], pending: [], paid: [], attention: [] };
+    const byTab: Record<StatusTab, Order[]> = { "": [], pending: [], paid: [], attention: attentionOrders };
     for (const o of initialOrders) {
       const paid = isClosedSale(o.status);
       totals.grand += o.total;
@@ -206,15 +217,57 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
         totals.pending += o.total;
         byTab.pending.push(o);
       }
-      if (DISPLAY_STATUS_META[orderDisplayStatus(paid, o.odoo_export_status)].attention) {
-        byTab.attention.push(o);
-      }
     }
     const counts = Object.fromEntries(
       Object.entries(byTab).map(([k, v]) => [k, v.length]),
     ) as Record<StatusTab, number>;
     return { totals, counts, byTab };
-  }, [initialOrders]);
+  }, [initialOrders, attentionOrders]);
+
+  // Red when something needs a decision; yellow when it's only waiting to be sent.
+  const attentionHasProblems = useMemo(() => attentionOrders.some(needsDecision), [attentionOrders]);
+  // Plain retries only; the server skips anything else as well.
+  const retryableIds = useMemo(
+    () =>
+      attentionOrders
+        .filter((o) => o.odoo_export_status === "pending" || o.odoo_export_status === "error")
+        .map((o) => o.id),
+    [attentionOrders],
+  );
+
+  async function retryAll() {
+    setRetrying(true);
+    setRetryResult(null);
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+    try {
+      for (let i = 0; i < retryableIds.length; i += RETRY_BATCH) {
+        const res = await fetch("/api/orders/bulk-transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: retryableIds.slice(i, i + RETRY_BATCH), transferred: true }),
+        });
+        const data = await res.json().catch(() => ({}));
+        skipped += Array.isArray(data.skipped) ? data.skipped.length : 0;
+        if (res.status === 409) continue;
+        if (!res.ok) throw new Error(data.message || "No se pudo reintentar.");
+        for (const r of data.results ?? []) {
+          if (r.export?.status === "exported") sent++;
+          else failed++;
+        }
+      }
+      const parts = [`${sent} enviado${sent === 1 ? "" : "s"} a Odoo`];
+      if (failed) parts.push(`${failed} siguen con problemas`);
+      if (skipped) parts.push(`${skipped} necesitan revisarse uno por uno`);
+      setRetryResult({ tone: failed || skipped ? "warn" : "ok", text: `${parts.join(" · ")}.` });
+    } catch (e) {
+      setRetryResult({ tone: "error", text: e instanceof Error ? e.message : "No se pudo reintentar." });
+    } finally {
+      setRetrying(false);
+      startTransition(() => router.refresh());
+    }
+  }
 
   const visibleOrders = byTab[statusTab];
   const avgTicket = initialOrders.length > 0 ? Math.round(totals.grand / initialOrders.length) : 0;
@@ -408,7 +461,9 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
             counts[t.value] === 0
               ? "bg-gray-100 text-text-secondary"
               : t.value === "attention"
-                ? "bg-red-100 text-red-700"
+                ? attentionHasProblems
+                  ? "bg-red-100 text-red-700"
+                  : "bg-yellow-100 text-yellow-800"
                 : t.value === "pending"
                   ? "bg-yellow-100 text-yellow-800"
                   : "bg-gray-100 text-text-secondary";
@@ -435,6 +490,38 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
           <Loader2 size={16} className="ml-auto mr-2 text-text-secondary animate-spin" aria-label="Cargando" />
         )}
       </div>
+
+      {statusTab === "attention" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <p className="text-sm text-text-secondary">
+            Pedidos cobrados con el envío a Odoo sin terminar, de cualquier fecha.
+          </p>
+          {retryableIds.length > 0 && (
+            <button
+              type="button"
+              onClick={retryAll}
+              disabled={retrying || isPending}
+              className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 px-4 py-2 rounded-md font-semibold text-sm text-white"
+            >
+              {retrying ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Reintentar envíos ({retryableIds.length})
+            </button>
+          )}
+          {retryResult && (
+            <p
+              className={`w-full rounded-md border px-3 py-2 text-sm ${
+                retryResult.tone === "ok"
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : retryResult.tone === "warn"
+                    ? "border-yellow-200 bg-yellow-50 text-yellow-800"
+                    : "border-red-200 bg-red-50 text-red-800"
+              }`}
+            >
+              {retryResult.text}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className={isPending ? "opacity-60 transition-opacity" : "transition-opacity"}>
         {visibleOrders.length > 0 ? (
@@ -478,13 +565,15 @@ export function SearchableOrderList({ initialOrders, events }: SearchableOrderLi
         ) : (
           <div className="flex flex-col justify-center items-center gap-2 bg-surface border-2 border-border border-dashed rounded-lg h-64 text-center">
             <p className="text-text-secondary">
-              {initialOrders.length > 0
+              {statusTab === "attention"
+                ? "No hay pedidos con el envío a Odoo pendiente."
+                : initialOrders.length > 0
                 ? `No hay pedidos en “${STATUS_TABS.find((t) => t.value === statusTab)?.label}”.`
                 : chips.length > 0
                   ? "No se encontraron pedidos para los filtros aplicados."
                   : `No hay pedidos en ${defaultPeriodLabel.toLowerCase()}.`}
             </p>
-            {initialOrders.length === 0 && !isWholeEvent && period === "default" && (
+            {statusTab !== "attention" && initialOrders.length === 0 && !isWholeEvent && period === "default" && (
               <button
                 type="button"
                 onClick={() => choosePeriod("7d")}

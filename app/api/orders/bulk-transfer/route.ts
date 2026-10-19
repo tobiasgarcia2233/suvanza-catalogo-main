@@ -20,10 +20,14 @@ export async function POST(request: Request) {
     if (ids.length > 20) return NextResponse.json({message:"Exportá hasta 20 pedidos por vez."},{status:400});
     await Promise.all(ids.map((id:string)=>requireActiveOrder(id)));
     const progress = await Promise.all(ids.map((id: string)=>getExport(id)));
-    if (progress.some(p=>exportAction(p) !== 'retry')) return NextResponse.json({message:'La selección incluye pedidos manuales, enviados o que requieren revisión. Actualizá el estado y usá la acción de cada pedido.'},{status:409});
+    // Only plain retries run in bulk. Orders that need a decision (customer,
+    // reconcile...) are skipped and keep their own action in the modal.
+    const eligible = ids.filter((_: string, i: number) => exportAction(progress[i]) === 'retry');
+    const skipped = ids.filter((id: string) => !eligible.includes(id));
+    if (!eligible.length) return NextResponse.json({message:'Ninguno de estos pedidos se puede reintentar en bloque: cada uno requiere revisarlo en su detalle.',skipped},{status:409});
     const results = [];
-    for (const id of ids) results.push({id, export:await retryPaidOrder(id,session.sub)});
-    return NextResponse.json({ message: "ok", count: ids.length, results });
+    for (const id of eligible) results.push({id, export:await retryPaidOrder(id,session.sub)});
+    return NextResponse.json({ message: "ok", count: eligible.length, results, skipped });
   } catch (err) {
     if (err instanceof OrderActionError) return NextResponse.json({message:err.message},{status:err.status});
     console.error("bulk-transfer error:", err);

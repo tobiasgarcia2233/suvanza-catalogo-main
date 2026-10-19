@@ -5,8 +5,7 @@ import { exportAction, parseExportResponse, needsHistoricalPricingReview, canRec
 
 /**
  * Local Odoo export state of one order, read from odoo_exports through
- * /api/orders/[id]/finalize. Shared by OdooExportStatus (/odoo) and OdooModal
- * (order cards) so both act on the outbox exactly the same way.
+ * /api/orders/[id]/finalize, for OdooModal.
  */
 export function useOdooExport(orderId: string) {
   const [progress,setProgress] = useState<ExportProgress|null>(null);

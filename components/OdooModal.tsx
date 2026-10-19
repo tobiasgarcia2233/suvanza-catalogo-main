@@ -11,47 +11,42 @@ import { OdooPartnerLink } from "./OdooPartnerLink";
 
 type Tone = "info" | "success" | "warning" | "error";
 
-const TONES: Record<Tone, { box: string; dot: string; icon: typeof Info }> = {
-  info: { box: "border-sky-200 bg-sky-50 text-sky-900", dot: "bg-sky-500", icon: Info },
-  success: { box: "border-green-200 bg-green-50 text-green-900", dot: "bg-green-600", icon: CheckCircle2 },
-  warning: { box: "border-orange-200 bg-orange-50 text-orange-900", dot: "bg-orange-500", icon: AlertTriangle },
-  error: { box: "border-red-200 bg-red-50 text-red-900", dot: "bg-red-500", icon: XCircle },
+const TONES: Record<Tone, { box: string; icon: typeof Info }> = {
+  info: { box: "border-sky-200 bg-sky-50 text-sky-900", icon: Info },
+  success: { box: "border-green-200 bg-green-50 text-green-900", icon: CheckCircle2 },
+  warning: { box: "border-orange-200 bg-orange-50 text-orange-900", icon: AlertTriangle },
+  error: { box: "border-red-200 bg-red-50 text-red-900", icon: XCircle },
 };
 
-/** What happened and what to do next, in plain words. Shared with the /odoo cards. */
-export function exportSummary(
-  progress: ExportProgress | null,
-  legacySent = false,
-): { tone: Tone; title: string; text: string; needsAction: boolean } {
+/** What happened and what to do next, in plain words. */
+function exportSummary(progress: ExportProgress | null): { tone: Tone; title: string; text: string } {
   if (!progress) {
-    return legacySent
-      ? { tone: "success", title: "Registrado en Odoo", text: "Este pedido se cargó en Odoo a mano, antes del envío automático.", needsAction: false }
-      : { tone: "info", title: "Sin envío automático", text: "Este pedido se gestiona a mano en Odoo.", needsAction: false };
+    return { tone: "info", title: "Sin envío automático", text: "Este pedido se gestiona a mano en Odoo." };
   }
   if (canRecoverPricingOnRetry(progress)) {
-    return { tone: "info", title: "Listo para reintentar", text: "Los precios originales se pueden recuperar. Reintentá el envío.", needsAction: true };
+    return { tone: "info", title: "Listo para reintentar", text: "Los precios originales se pueden recuperar. Reintentá el envío." };
   }
   switch (progress.status) {
     case "pending":
-      return { tone: "info", title: "Listo para enviar", text: "El pago está confirmado. Falta enviar el pedido a Odoo.", needsAction: true };
+      return { tone: "info", title: "Listo para enviar", text: "El pago está confirmado. Falta enviar el pedido a Odoo." };
     case "processing":
-      return { tone: "info", title: "Enviando a Odoo…", text: "Actualizá el estado en unos segundos.", needsAction: false };
+      return { tone: "info", title: "Enviando a Odoo…", text: "Actualizá el estado en unos segundos." };
     case "exported":
-      return { tone: "success", title: "Enviado a Odoo", text: "El presupuesto se creó en Odoo.", needsAction: false };
+      return { tone: "success", title: "Enviado a Odoo", text: "El presupuesto se creó en Odoo." };
     case "legacy_sent":
-      return { tone: "success", title: "Registrado en Odoo", text: "Este pedido se cargó en Odoo antes del envío automático. No se vuelve a enviar.", needsAction: false };
+      return { tone: "success", title: "Registrado en Odoo", text: "Este pedido se cargó en Odoo antes del envío automático. No se vuelve a enviar." };
     case "customer_review":
-      return { tone: "warning", title: "Los datos del cliente no coinciden", text: "Ya existe en Odoo un cliente con este DNI, pero algunos datos son distintos. Elegí con qué dato quedarte en cada fila.", needsAction: true };
+      return { tone: "warning", title: "Los datos del cliente no coinciden", text: "Ya existe en Odoo un cliente con este DNI, pero algunos datos son distintos. Elegí con qué dato quedarte en cada fila." };
     case "customer_selection":
-      return { tone: "warning", title: "Hay varios clientes posibles", text: "Más de un cliente de Odoo coincide con este DNI. Elegí cuál usar.", needsAction: true };
+      return { tone: "warning", title: "Hay varios clientes posibles", text: "Más de un cliente de Odoo coincide con este DNI. Elegí cuál usar." };
     case "review":
-      return { tone: "warning", title: "Hay que verificar en Odoo", text: "No se sabe si el presupuesto llegó a crearse. Verificalo antes de seguir, así no se duplica.", needsAction: true };
+      return { tone: "warning", title: "Hay que verificar en Odoo", text: "No se sabe si el presupuesto llegó a crearse. Verificalo antes de seguir, así no se duplica." };
     case "pricing_review":
-      return { tone: "warning", title: "Revisar precios originales", text: "", needsAction: true };
+      return { tone: "warning", title: "Revisar precios originales", text: "" };
     case "error":
-      return { tone: "error", title: "No se pudo enviar a Odoo", text: "Revisá el motivo, corregilo y reintentá.", needsAction: true };
+      return { tone: "error", title: "No se pudo enviar a Odoo", text: "Revisá el motivo, corregilo y reintentá." };
     default:
-      return { tone: "info", title: progress.status, text: "", needsAction: false };
+      return { tone: "info", title: progress.status, text: "" };
   }
 }
 
@@ -66,14 +61,12 @@ export default function OdooModal({
   onClose,
   orderId,
   buyerName,
-  legacySent = false,
   onChanged,
 }: {
   open: boolean;
   onClose: () => void;
   orderId: string;
   buyerName: string;
-  legacySent?: boolean;
   /** Called after any action that changed the export, to refresh the card. */
   onChanged: () => void;
 }) {
@@ -97,7 +90,7 @@ export default function OdooModal({
           Comprador: <span className="font-medium">{buyerName}</span>
         </p>
         {/* Mounted only while open: every opening reads the export fresh. */}
-        <OdooPanel orderId={orderId} legacySent={legacySent} onChanged={onChanged} />
+        <OdooPanel orderId={orderId} onChanged={onChanged} />
       </div>
     </div>
   );
@@ -105,7 +98,7 @@ export default function OdooModal({
 
 type Keep = "order" | "odoo";
 
-function OdooPanel({ orderId, legacySent, onChanged }: { orderId: string; legacySent: boolean; onChanged: () => void }) {
+function OdooPanel({ orderId, onChanged }: { orderId: string; onChanged: () => void }) {
   const { progress, busy, error, readError, reading, send: post, reload, action, blocked, canCorrect } = useOdooExport(orderId);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<BuyerData>({ name: "", dni: "", phone: "" });
@@ -177,7 +170,7 @@ function OdooPanel({ orderId, legacySent, onChanged }: { orderId: string; legacy
 
   const review = progress?.status === "customer_review" && !progress.quotation_id ? progress.customer_review : undefined;
   const candidates = progress?.status === "customer_selection" ? progress.candidates ?? [] : [];
-  const { tone, title, text } = exportSummary(progress, legacySent);
+  const { tone, title, text } = exportSummary(progress);
   const { box, icon: Icon } = TONES[tone];
   // One place for every message: the failed action first, then the stored reason.
   const storedDetail = exportErrorDetail(progress);

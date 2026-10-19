@@ -7,7 +7,7 @@ import type { EventOption } from "@/lib/eventQueries";
 type Item = { value: string; label: string; group: string | null };
 
 /**
- * Searchable version of EventFilterSelect: every order, "Individual" (outside
+ * Searchable sales-context filter: every order, "Individual" (outside
  * events), or one event. Value: "" | "individual" | event id.
  */
 export function EventCombobox({

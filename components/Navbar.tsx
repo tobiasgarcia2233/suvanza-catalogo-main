@@ -14,7 +14,7 @@ import { useSessionStore } from "@/store/sessionStore";
 // enforced by the middleware (proxy.ts) and each page, so this never needs to
 // read the auth cookie. Keeping cookies() out of the root layout is what lets
 // the seller catalog (/[seller_name]) be statically cached.
-const ADMIN_PREFIXES = ["/admin", "/orders", "/odoo", "/catalogo"];
+const ADMIN_PREFIXES = ["/admin", "/orders", "/catalogo"];
 
 function isAdminPath(pathname: string) {
   return ADMIN_PREFIXES.some(

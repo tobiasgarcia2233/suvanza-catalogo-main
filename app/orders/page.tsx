@@ -28,14 +28,17 @@ export default async function OrdersDashboardPage({
   // Only the orders list is fetched here, so router.refresh() (polling or after
   // creating a sale) stays cheap. The product catalog needed by "Nuevo pedido"
   // is loaded once, client-side, in OrdersPageClient.
-  const [initialOrders, events] = await Promise.all([
+  // "Requiere atención" ignores the period: an export that failed days ago
+  // must still show up.
+  const [initialOrders, attentionOrders, events] = await Promise.all([
     fetchRecentOrders(q || "", startDate, endDate, { event }),
+    fetchRecentOrders(q || "", undefined, undefined, { event, odooAttention: true }),
     getEventOptions(),
   ]);
 
   return (
     <Suspense fallback={<p className="p-8 text-center">Cargando pedidos...</p>}>
-      <OrdersPageClient initialOrders={initialOrders} events={events} />
+      <OrdersPageClient initialOrders={initialOrders} attentionOrders={attentionOrders} events={events} />
     </Suspense>
   );
 }

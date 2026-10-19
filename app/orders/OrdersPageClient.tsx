@@ -11,10 +11,11 @@ import { Loader2, Plus } from "lucide-react";
 
 interface OrdersPageClientProps {
   initialOrders: Order[];
+  attentionOrders: Order[];
   events: EventOption[];
 }
 
-export function OrdersPageClient({ initialOrders, events }: OrdersPageClientProps) {
+export function OrdersPageClient({ initialOrders, attentionOrders, events }: OrdersPageClientProps) {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [promotions, setPromotions] = useState<CrossPromotion[]>([]);
@@ -57,7 +58,7 @@ export function OrdersPageClient({ initialOrders, events }: OrdersPageClientProp
         <p className="mt-1 text-text-secondary">Cobros y gestión de pedidos.</p>
       </div>
 
-      <SearchableOrderList initialOrders={initialOrders} events={events} />
+      <SearchableOrderList initialOrders={initialOrders} attentionOrders={attentionOrders} events={events} />
 
       <button
         onClick={() => setIsQuickAddOpen(true)}
