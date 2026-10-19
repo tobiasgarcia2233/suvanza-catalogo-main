@@ -10,7 +10,6 @@ const navItems = [
   { href: "/catalogo", label: "Catálogo" },
   { href: "/admin/sellers", label: "Equipo de ventas" },
   { href: "/orders", label: "Pedidos" },
-  { href: "/odoo", label: "Odoo" },
 ];
 
 function isActive(pathname: string, href: string) {

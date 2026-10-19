@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   Tags,
   ClipboardList,
-  ArrowRightLeft,
   ArrowRight,
   Users,
 } from "lucide-react";
@@ -30,12 +29,6 @@ const links = [
     label: "Pedidos",
     description: "Revisa y confirma los pedidos recibidos.",
     icon: ClipboardList,
-  },
-  {
-    href: "/odoo",
-    label: "Pasar a Odoo",
-    description: "Exporta los pedidos confirmados al ERP.",
-    icon: ArrowRightLeft,
   },
 ];
 

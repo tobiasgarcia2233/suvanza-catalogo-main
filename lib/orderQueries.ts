@@ -90,20 +90,18 @@ function eventCondition(event: string | undefined): { sql: string; args: string[
   return { sql: "event_id = ?", args: [event] };
 }
 
-/** Admin dashboard filter by order status. */
-export type OrderStatusFilter = "pending" | "paid" | "odoo_error";
-
-const STATUS_CONDITIONS: Record<OrderStatusFilter, string> = {
-  pending: "status = 'PENDING_PAYMENT'",
-  paid: `status IN (${CLOSED_SALE_SQL})`,
-  odoo_error: "status = 'ODOO_ERROR'",
-};
+/**
+ * odoo_exports states the operator has to act on: not sent yet, failed, or
+ * waiting on a decision. "processing" resolves by itself.
+ */
+const ODOO_ATTENTION_SQL = "'pending', 'error', 'review', 'pricing_review', 'customer_review', 'customer_selection'";
 
 export async function fetchRecentOrders(
   query?: string,
   startDate?: string,
   endDate?: string,
-  filters: { event?: string; status?: OrderStatusFilter } = {},
+  /** odooAttention: every paid order whose Odoo export needs action, of any date. */
+  filters: { event?: string; odooAttention?: boolean } = {},
 ): Promise<Order[]> {
   const conditions: string[] = [activeOrderSql()];
   const args: (string | number)[] = [];
@@ -113,11 +111,11 @@ export async function fetchRecentOrders(
     conditions.push(byEvent.sql);
     args.push(...byEvent.args);
   }
-  if (filters.status && STATUS_CONDITIONS[filters.status]) {
-    conditions.push(STATUS_CONDITIONS[filters.status]);
-  }
 
-  if (startDate && endDate) {
+  if (filters.odooAttention) {
+    conditions.push(`status IN (${CLOSED_SALE_SQL})`);
+    conditions.push(`EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id AND status IN (${ODOO_ATTENTION_SQL}))`);
+  } else if (startDate && endDate) {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
     conditions.push("created_at >= ?");
@@ -351,45 +349,6 @@ export async function setOrderEvent(id: string, eventId: string | null): Promise
 
 export async function deleteOrder(id: string, actor: string, sellerOnly = false): Promise<void> {
   await softDeleteOrder(id,actor,sellerOnly);
-}
-
-export async function fetchOrdersForOdoo(options: {
-  includeSent?: boolean;
-  startDate?: string;
-  endDate?: string;
-  event?: string;
-}): Promise<Order[]> {
-  // Only paid orders go to Odoo. By default the queue is what still needs
-  // sending (never sent, or the last attempt failed); includeSent adds the
-  // ones already in Odoo.
-  const conditions: string[] = [
-    activeOrderSql(),
-    options.includeSent
-      ? `status IN (${CLOSED_SALE_SQL})`
-      : `status IN (${ODOO_QUEUE_STATUSES.map((s) => `'${s}'`).join(", ")})`,
-  ];
-  if (!options.includeSent) conditions.push("NOT EXISTS (SELECT 1 FROM odoo_exports WHERE order_id = orders.id AND status = 'exported')");
-  const args: (string | number)[] = [];
-
-  const byEvent = eventCondition(options.event);
-  if (byEvent) {
-    conditions.push(byEvent.sql);
-    args.push(...byEvent.args);
-  }
-
-  if (options.startDate && options.endDate) {
-    const end = new Date(options.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push("created_at >= ?");
-    conditions.push("created_at <= ?");
-    args.push(new Date(options.startDate).toISOString(), end.toISOString());
-  }
-
-  const res = await db.execute({
-    sql: `SELECT orders.*, (SELECT status FROM odoo_exports WHERE order_id = orders.id) AS odoo_export_status FROM orders WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
-    args,
-  });
-  return (res.rows as unknown as OrderRow[]).map(rowToOrder);
 }
 
 export async function getSellerSalesStats(

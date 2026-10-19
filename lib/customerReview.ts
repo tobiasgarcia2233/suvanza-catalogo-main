@@ -11,9 +11,11 @@ export type CustomerComparison = {
   canApprove: boolean;
 };
 export type CustomerAudit = {
-  kind: 'correction' | 'approval' | 'deferred'; actor: string; at: string; revision: number;
+  kind: 'correction' | 'approval' | 'deferred' | 'partner_update'; actor: string; at: string; revision: number;
   before?: BuyerData; after?: BuyerData; comparison?: CustomerComparison;
   releasedPartnerId?: number | null; releasedCustomerReference?: string;
+  /** partner_update: the Odoo contact written and the exact values replaced. */
+  partnerId?: number; partnerBefore?: Partial<Pick<BuyerData, 'name' | 'phone'>>; partnerAfter?: Partial<Pick<BuyerData, 'name' | 'phone'>>;
 };
 export type CustomerReviewData = {
   revision: number; buyer?: BuyerData; review?: CustomerComparison;
@@ -23,7 +25,13 @@ export type CustomerReviewData = {
 export type CustomerReviewAction =
   | { kind: 'approve'; actor: string; revision: number; token: string; partnerId: number }
   | { kind: 'correct'; actor: string; revision: number; buyer: BuyerData; preserveResolvedContact: boolean }
-  | { kind: 'defer'; actor: string; revision: number };
+  | { kind: 'defer'; actor: string; revision: number }
+  /** Write the order's name/phone onto the resolved Odoo contact. Never the document. */
+  /** approveRest: the operator chose to keep Odoo's value for every other name/phone difference. */
+  | { kind: 'update_partner'; actor: string; revision: number; token: string; partnerId: number; fields: PartnerUpdateField[]; approveRest: boolean };
+
+export type PartnerUpdateField = 'name' | 'phone';
+export const PARTNER_UPDATE_FIELDS: readonly PartnerUpdateField[] = ['name', 'phone'];
 
 export const CUSTOMER_REVIEW_MESSAGE = 'Pedido pagado. Revisar datos del cliente antes de enviar a Odoo.';
 /** Accent-, case- and punctuation-insensitive: "Ramírez" = "ramirez", "D'Angelo" = "d angelo". */

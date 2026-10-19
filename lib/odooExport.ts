@@ -98,6 +98,46 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
         await save({customer_data:JSON.stringify(customer)});
         return await getExport(orderId,client);
       }
+      if (action.kind === 'update_partner') {
+        if (state.status !== 'customer_review' || !customer.review || state.partner_id !== action.partnerId) throw new Error('El cliente a actualizar cambió. Volvé a revisar sus datos.');
+        const buyer = customer.buyer ?? s.buyer;
+        const comparison = await compareCustomer(call,{...s,buyer},action.partnerId,customer.revision);
+        if (comparison.token !== action.token) {
+          // Odoo or the order changed since the comparison was shown: never write
+          // values the operator didn't see. Show the fresh comparison instead.
+          customer.review = comparison;
+          await save({customer_data:JSON.stringify(customer),error:`${CUSTOMER_REVIEW_MESSAGE} Los datos de Odoo cambiaron; revisá la comparación actualizada.`});
+          return await getExport(orderId,client);
+        }
+        // Only an active contact whose document already matches may be edited.
+        if (!comparison.canApprove) throw new Error('El documento no coincide o el cliente está archivado; no se modifica el contacto en Odoo.');
+        const fields = action.fields.filter(f => comparison.differences[f]);
+        if (!fields.length) throw new Error('No hay diferencias de nombre o teléfono para actualizar.');
+        const keptOdoo = (['name','phone'] as const).filter(f => comparison.differences[f] && !fields.includes(f));
+        if (keptOdoo.length && !action.approveRest) throw new Error('Elegí qué dato conservar en cada diferencia.');
+        const vals: Partial<Record<'name' | 'phone', string>> = {};
+        for (const f of fields) {
+          if (!buyer[f]?.trim()) throw new Error('El pedido no tiene ese dato completo. Corregí los datos del comprador primero.');
+          vals[f] = buyer[f].trim();
+        }
+        // Idempotent: a lost response is safe to repeat, and the next comparison shows the outcome.
+        await call('res.partner','write',{ids:[action.partnerId],vals});
+        customer.audit.push({kind:'partner_update',actor:action.actor,at:new Date().toISOString(),revision:customer.revision,partnerId:action.partnerId,
+          partnerBefore:Object.fromEntries(fields.map(f => [f,comparison.remote[f]])),partnerAfter:vals});
+        delete customer.review;
+        if (keptOdoo.length) {
+          // The remaining differences are exactly the ones the operator chose to
+          // keep from Odoo: approve the contact as it is after the write.
+          const after = await compareCustomer(call,{...s,buyer},action.partnerId,customer.revision);
+          const pending = (['name','phone','document'] as const).filter(f => after.differences[f]);
+          if (after.canApprove && pending.every(f => (keptOdoo as string[]).includes(f))) {
+            customer.approval = after;
+            customer.audit.push({kind:'approval',actor:action.actor,at:new Date().toISOString(),revision:customer.revision,comparison:after});
+          }
+        }
+        await save({customer_data:JSON.stringify(customer)});
+        // Continue below: the export compares again and sends if nothing else differs.
+      }
       if (action.kind === 'approve' && (state.partner_id !== action.partnerId || (!customer.review && customer.approval?.token !== action.token))) throw new Error('El cliente seleccionado cambió. Volvé a revisar sus datos.');
       if (action.kind === 'correct') {
         const buyer = validateCorrection(action.buyer);
