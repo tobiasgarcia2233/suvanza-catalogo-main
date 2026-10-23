@@ -126,6 +126,7 @@ export function OrderInfoModal({
       buyerName,
       buyerDni,
       buyerPhone,
+      checkoutCart: items,
       items: flattenedItems, // Use the new flattened items list
       promos: promosSold,
       subtotal,

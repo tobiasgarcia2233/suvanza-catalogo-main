@@ -13,7 +13,8 @@
     "db:reset": "node --env-file=.env.local --import tsx scripts/migrate.ts -- --wipe",
     "auth:hash": "node --env-file=.env.local --import tsx scripts/hash-password.ts",
     "db:migrate:odoo-exports": "node --env-file=.env --import tsx scripts/migrate-odoo-exports.ts",
-    "db:migrate:order-deletion": "node --env-file=.env --import tsx scripts/migrate-order-deletion.ts"
+    "db:migrate:order-deletion": "node --env-file=.env --import tsx scripts/migrate-order-deletion.ts",
+    "test:pricing": "node --import ./tests/isolation.mjs --import tsx --test tests/checkout-pricing.test.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",

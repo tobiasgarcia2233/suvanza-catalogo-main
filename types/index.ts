@@ -64,6 +64,10 @@ export interface OdooProductDetails {
 
 export interface PricingAllocation {
   version: 2;
+  serverCalculated?: true;
+  promotionName?: string;
+  appliedTierUnitPrice?: number;
+  adjustmentAmount?: number;
   kind: 'promotion' | 'extra';
   unitPrice: number;
   agreedTotal: number;

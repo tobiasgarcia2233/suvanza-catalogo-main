@@ -1,6 +1,6 @@
 "use client";
 
-import { validatePromotion } from "@/lib/checkoutPricing";
+import { validatePromotion, promotionComponentTotal, promotionReviewMessage } from "@/lib/checkoutPricing";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CrossPromotion, Product } from "@/types";
@@ -21,7 +21,6 @@ type ItemState = {
 type FormState = {
   id: string;
   title: string;
-  totalPrice: number;
   isPromo: boolean;
   items: ItemState[];
   linkedProductIds: string[];
@@ -31,7 +30,6 @@ function initial(promo?: CrossPromotion): FormState {
   return {
     id: promo?.id ?? "",
     title: promo?.title ?? "",
-    totalPrice: promo?.totalPrice ?? 0,
     isPromo: promo?.isPromo ?? true,
     items:
       promo?.items?.map((it) => ({
@@ -67,6 +65,10 @@ export default function PromotionForm({
     }
     return s;
   });
+  const reviewMessage = promo ? promotionReviewMessage(promo) : null;
+  const derivedTotal = useMemo(() => {
+    try { return promotionComponentTotal(state.items); } catch { return 0; }
+  }, [state.items]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,7 +147,7 @@ export default function PromotionForm({
       const payload = {
         id: state.id || undefined,
         title: state.title.trim(),
-        totalPrice: Number(state.totalPrice),
+        totalPrice: derivedTotal,
         isPromo: state.isPromo,
         items: state.items.map((it) => ({
           itemId: it.itemId.trim(),
@@ -202,6 +204,7 @@ export default function PromotionForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
+      {reviewMessage && <p role="alert" className="text-amber-800">{reviewMessage} Total guardado: ${promo!.totalPrice.toLocaleString("es-AR")}. Guardar confirmará explícitamente el nuevo total de componentes.</p>}
       <section className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
         <h2 className="font-semibold">Datos de la promoción</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -218,14 +221,10 @@ export default function PromotionForm({
           </label>
           <label className="flex flex-col text-sm">
             <span className="text-gray-600">Precio total del combo</span>
-            <NumberStepper
-              value={state.totalPrice}
-              onCommit={(value) =>
-                setState((s) => ({ ...s, totalPrice: value ?? 0 }))
-              }
-              min={0}
-              step={100}
-            />
+            <output className="rounded border border-gray-300 px-3 py-2">
+              ${derivedTotal.toLocaleString("es-AR", {minimumFractionDigits:2})}
+            </output>
+            <span className="text-xs text-gray-500">Suma de precios unitarios × cantidades.</span>
           </label>
           <label className="flex items-center gap-2 text-sm mt-6">
             <input

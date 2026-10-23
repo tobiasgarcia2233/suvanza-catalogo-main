@@ -1,4 +1,4 @@
-import { validatePromotion } from "./checkoutPricing";
+import { validatePromotion, promotionComponentTotal } from "./checkoutPricing";
 import "server-only";
 import { db } from "./db";
 import type { Variant, PriceTier } from "@/types";
@@ -200,7 +200,7 @@ export async function deleteProduct(id: string): Promise<void> {
 export type PromotionInput = {
   id?: string;
   title: string;
-  totalPrice: number;
+  totalPrice?: number;
   isPromo?: boolean;
   position?: number;
   items: {
@@ -240,13 +240,14 @@ async function persistPromotion(
   input: PromotionInput,
   isUpdate: boolean,
 ) {
-  validatePromotion({title:input.title,totalPrice:input.totalPrice,items:input.items.map(i => ({...i,id:i.itemId,name:i.itemName}))});
+  const derivedTotal = promotionComponentTotal(input.items);
+  validatePromotion({title:input.title,totalPrice:input.totalPrice ?? derivedTotal,items:input.items.map(i => ({...i,id:i.itemId,name:i.itemName}))});
   if (isUpdate) {
     await db.execute({
       sql: `UPDATE promotions SET title=?, total_price=?, is_promo=?, position=? WHERE id=?`,
       args: [
         input.title,
-        input.totalPrice,
+        derivedTotal,
         input.isPromo === false ? 0 : 1,
         input.position ?? 0,
         id,
@@ -268,7 +269,7 @@ async function persistPromotion(
       args: [
         id,
         input.title,
-        input.totalPrice,
+        derivedTotal,
         input.isPromo === false ? 0 : 1,
         input.position ?? 0,
       ],

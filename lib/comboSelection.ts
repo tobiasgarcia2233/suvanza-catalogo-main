@@ -69,14 +69,14 @@ export function matchesRequirement(
 
 // A flow network reserves concrete product units across ALL requirement rows.
 // Reverse edges let an exact requirement reclaim units from a broader match.
-function allocate(items: CartItem[], promotion: CrossPromotion, count: number) {
+export function allocatePromotionComponents(items: CartItem[], promotion: CrossPromotion, count: number, matches = matchesRequirement) {
   const rows = promotion.items.length;
   const sink = 1 + items.length + rows;
   const capacity = Array.from({ length: sink + 1 }, () => Array(sink + 1).fill(0) as number[]);
   items.forEach((item, i) => {
     capacity[0][1 + i] = Math.floor(item.quantity);
     promotion.items.forEach((row, j) => {
-      if (matchesRequirement(item, row)) capacity[1 + i][1 + items.length + j] = Math.floor(item.quantity);
+      if (matches(item, row)) capacity[1 + i][1 + items.length + j] = Math.floor(item.quantity);
     });
   });
   promotion.items.forEach((row, j) => {
@@ -170,11 +170,11 @@ export function findComboCandidates(items: CartItem[], promotions: CrossPromotio
     let low = 0;
     while (low < high) {
       const mid = low + Math.ceil((high - low) / 2);
-      if (allocate(loose, promotion, mid)) low = mid;
+      if (allocatePromotionComponents(loose, promotion, mid)) low = mid;
       else high = mid - 1;
     }
     if (!low) return [];
-    const allocation = allocate(loose, promotion, low)!;
+    const allocation = allocatePromotionComponents(loose, promotion, low)!;
     const remaining = loose.map((item, i) => ({
       ...item,
       quantity: item.quantity - allocation.reduce((sum, row) => sum + row[i], 0),
@@ -278,7 +278,7 @@ export function allocateComboSelection(
       ...row, quantity: row.quantity * quantities[promotion.id],
     }))),
   };
-  const allocation = allocate(loose, combined, 1);
+  const allocation = allocatePromotionComponents(loose, combined, 1);
   if (!allocation) return null;
   const remaining = loose.map((item, i) => ({
     ...item, quantity: item.quantity - allocation.reduce((sum, row) => sum + row[i], 0),
@@ -321,7 +321,7 @@ export function isComboSelectionUnambiguous(items:CartItem[],promotions:CrossPro
   const loose=items.filter(i=>!i.isPromo);
   const combined:CrossPromotion={id:'recovery',title:'Recuperación',totalPrice:0,isPromo:true,
     items:promotions.flatMap(p=>p.items.map(row=>({...row,quantity:row.quantity*quantities[p.id]})))};
-  const matrix=allocate(loose,combined,1);
+  const matrix=allocatePromotionComponents(loose,combined,1);
   if(!matrix)return false;
   const graph:number[][]=Array.from({length:1+loose.length+combined.items.length},()=>[]);
   loose.forEach((item,i)=>{

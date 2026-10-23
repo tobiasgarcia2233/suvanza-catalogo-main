@@ -1,5 +1,6 @@
 "use client";
 
+import { promotionReviewMessage } from "@/lib/checkoutPricing";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CrossPromotion } from "@/types";
@@ -52,6 +53,7 @@ export default function PromotionsTable({
                 </td>
                 <td className="py-2 px-4 text-right">
                   ${p.totalPrice.toLocaleString("es-AR")}
+                  {promotionReviewMessage(p) && <p className="text-amber-800" role="alert">Requiere revisión: componentes y total inconsistentes.</p>}
                 </td>
                 <td className="py-2 px-4 text-right">
                   <Link
