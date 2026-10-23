@@ -1,4 +1,5 @@
-import { validatePurchasedItems, validateAllocationManifest } from "@/lib/checkoutPricing";
+import { calculateCheckout, CheckoutPricingError } from "@/lib/serverCheckoutPricing";
+import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
 import { NextResponse } from "next/server";
 import { createOrder, fetchOrdersBySeller } from "@/lib/orderQueries";
 import { getSellerByName, getSellerBySlug } from "@/lib/sellerQueries";
@@ -7,7 +8,6 @@ import {
   EventOrderError,
   INDIVIDUAL_EVENT_SLUG,
 } from "@/lib/eventQueries";
-import type { CartItem } from "@/types";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -61,19 +61,19 @@ export async function POST(request: Request) {
 
     const eventId: string | null =
       typeof body.eventId === "string" && body.eventId ? body.eventId : null;
+    const [products, promotions] = await Promise.all([getAllProducts(), getAllPromotions()]);
+    const priced = calculateCheckout(body.checkoutCart, products, promotions, body.total);
     if (eventId) {
       await assertSellerEventOrder({
         eventId,
         sellerId: seller.id,
-        itemIds: body.items.map((item: CartItem) => String(item.id)),
-        promotionIds: Array.isArray(body.promos)
-          ? body.promos.map((p: { id: string }) => String(p.id))
+        itemIds: priced.items.map((item) => String(item.id)),
+        promotionIds: Array.isArray(priced.promos)
+          ? priced.promos.map((p: { id: string }) => String(p.id))
           : [],
       });
     }
 
-    validatePurchasedItems(body.items, body.total);
-    if (body.promos?.length || body.items.some((i: {pricing?:unknown})=>i.pricing)) validateAllocationManifest(body.items,body.promos ?? []);
     const id = await createOrder({
       status: "PENDING_PAYMENT",
       date: {
@@ -83,32 +83,24 @@ export async function POST(request: Request) {
         hour: now.getHours(),
         minutes: now.getMinutes(),
       },
-      total: body.total,
-      discounted_amount: body.subtotal - body.total,
-      items: body.items.map((item: CartItem) => ({
-        id: String(item.id),
-        pricing: (item as unknown as import("@/types").Order["items"][number]).pricing,
-        name: item.name,
-        brand: item.brand,
-        quantity: item.quantity,
-        finalPrice: item.finalPrice ?? null,
-        discountPercentage: item.discountPercentage,
-      })),
+      total: priced.total,
+      discounted_amount: priced.discounted_amount,
+      items: priced.items,
       buyer_details: {
         name: body.buyerName,
         dni: body.buyerDni,
         phone: body.buyerPhone,
       },
       seller_name: seller.name,
-      autoApplyPromos: !!body.autoApplyPromos,
-      promos_sold: Array.isArray(body.promos) ? body.promos : null,
+      autoApplyPromos: priced.promos.length > 0,
+      promos_sold: priced.promos,
       event_id: eventId,
     });
 
     return NextResponse.json({ message: "Order created", id }, { status: 201 });
   } catch (error) {
-    if (error instanceof EventOrderError) {
-      return NextResponse.json({ message: error.message }, { status: error.status });
+    if (error instanceof EventOrderError || error instanceof CheckoutPricingError) {
+      return NextResponse.json({ message: error.message }, { status: error instanceof CheckoutPricingError ? 400 : error.status });
     }
     console.error("POST /api/orders error:", error);
     return NextResponse.json(

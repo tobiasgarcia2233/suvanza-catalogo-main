@@ -1,4 +1,5 @@
-import { validatePurchasedItems, validateAllocationManifest } from "@/lib/checkoutPricing";
+import { calculateCheckout, CheckoutPricingError } from "@/lib/serverCheckoutPricing";
+import { getAllProducts, getAllPromotions } from "@/lib/productQueries";
 import { NextRequest, NextResponse } from "next/server";
 import { OrderActionError } from "@/lib/orderDeletion";
 import { deleteOrder, updateOrder, getOrder, setOrderEvent } from "@/lib/orderQueries";
@@ -75,15 +76,21 @@ export async function PATCH(
 
     const body = await request.json();
 
+    let priced: ReturnType<typeof calculateCheckout> | null = null;
+    if (Array.isArray(body.items) && body.total !== undefined) {
+      const [products, promotions] = await Promise.all([getAllProducts(), getAllPromotions()]);
+      priced = calculateCheckout(body.checkoutCart, products, promotions, body.total);
+    }
+
     if (sellerEvent) {
       // A closed event blocks any change; new lines must belong to the event.
       await assertSellerEventOrder({
         ...sellerEvent,
-        itemIds: Array.isArray(body.items)
-          ? body.items.map((it: CartLine) => String(it.id))
+        itemIds: priced
+          ? priced.items.map((it: CartLine) => String(it.id))
           : [],
-        promotionIds: Array.isArray(body.promos)
-          ? body.promos.map((p: { id: string }) => String(p.id))
+        promotionIds: priced
+          ? priced.promos.map((p: { id: string }) => String(p.id))
           : [],
       });
     }
@@ -93,31 +100,17 @@ export async function PATCH(
     // 2) Partial status update: { status?, notes?, payments? } — admin only.
     const patch: Parameters<typeof updateOrder>[1] = {};
 
-    if (Array.isArray(body.items) && body.total !== undefined) {
-      validatePurchasedItems(body.items, Number(body.total));
-      if (body.promos?.length || body.items.some((i: {pricing?:unknown})=>i.pricing)) validateAllocationManifest(body.items,body.promos ?? []);
-      patch.items = body.items.map((it: CartLine) => ({
-        id: String(it.id),
-        pricing: it.pricing,
-        brand: it.brand ?? "",
-        name: it.name,
-        quantity: it.quantity,
-        finalPrice: it.finalPrice ?? null,
-        discountPercentage: it.discountPercentage,
-      }));
-      patch.total = Number(body.total);
-      patch.discounted_amount = Number(body.subtotal) - Number(body.total);
+    if (priced) {
+      patch.items = priced.items;
+      patch.total = priced.total;
+      patch.discounted_amount = priced.discounted_amount;
       patch.buyer_details = {
         name: body.buyerName,
         dni: body.buyerDni,
         phone: body.buyerPhone,
       };
-      if (body.autoApplyPromos !== undefined) {
-        patch.autoApplyPromos = !!body.autoApplyPromos;
-      }
-      if (Array.isArray(body.promos)) {
-        patch.promos_sold = body.promos;
-      }
+      patch.autoApplyPromos = priced.promos.length > 0;
+      patch.promos_sold = priced.promos;
     }
 
     // Admin-only fields: a seller editing via their personal link may only
@@ -171,8 +164,8 @@ export async function PATCH(
     const odooExport = patch.status === "COMPLETED" ? await exportPaidOrder(orderId) : undefined;
     return NextResponse.json({ message: "Order updated", odooExport });
   } catch (error) {
-    if (error instanceof EventOrderError || error instanceof OrderActionError) {
-      return NextResponse.json({ message: error.message }, { status: error.status });
+    if (error instanceof EventOrderError || error instanceof OrderActionError || error instanceof CheckoutPricingError) {
+      return NextResponse.json({ message: error.message }, { status: error instanceof CheckoutPricingError ? 400 : error.status });
     }
     console.error("PATCH /api/orders/[orderId] error:", error);
     return NextResponse.json(
@@ -224,8 +217,8 @@ export async function DELETE(
     await deleteOrder(orderId,actor,!!sellerSlug);
     return NextResponse.json({ message: "Deleted" });
   } catch (error) {
-    if (error instanceof EventOrderError || error instanceof OrderActionError) {
-      return NextResponse.json({ message: error.message }, { status: error.status });
+    if (error instanceof EventOrderError || error instanceof OrderActionError || error instanceof CheckoutPricingError) {
+      return NextResponse.json({ message: error.message }, { status: error instanceof CheckoutPricingError ? 400 : error.status });
     }
     console.error("DELETE /api/orders/[orderId] error:", error);
     return NextResponse.json(

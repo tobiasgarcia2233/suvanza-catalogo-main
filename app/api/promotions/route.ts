@@ -15,9 +15,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    if (!body.title || typeof body.totalPrice !== "number") {
+    if (!body.title || !Array.isArray(body.items)) {
       return NextResponse.json(
-        { message: "title and totalPrice required" },
+        { message: "title and items required" },
         { status: 400 },
       );
     }

@@ -1,7 +1,7 @@
 import 'server-only';
-import { cents, decimal, div, roundTo, extendedCents } from './money';
+import { cents, extendedCents } from './money';
 import { odooCall } from './odooClient';
-import { commercialLines, normalizeDni } from './odooExportValues';
+import { commercialLines, normalizeDni, exportPriceParts } from './odooExportValues';
 import { missingOdooProductMessage } from './odooExportStatus';
 import { validateSalesTax, type SalesTaxPolicy, type SalesTaxAdoption } from './odooTaxPolicy';
 // JSON-2 records have dynamic fields, checked at their usage boundary.
@@ -62,19 +62,16 @@ export async function quotationPayload(call: Call, s: ExportSnapshot, partnerId:
   const [precision] = await search(call,'decimal.precision',[['name','=','Product Price']],['digits']);
   if (!Number.isInteger(precision?.digits) || precision.digits < 0 || precision.digits > 8) throw new Error('No se pudo verificar la precisión del precio Odoo.');
   let expectedCents = 0;
-  const orderLines = s.lines.map((line): [number,number,RecordData] => {
+  const orderLines = s.lines.flatMap((line): [number,number,RecordData][] => {
     const product = products.find(p => p.id === line.productId);
     if (!product?.uom_id) throw new Error(`La variante ${line.name} tiene un vínculo Odoo inválido/inactivo o de otra empresa.`);
     // The snapshot contains the final catalogue price, already discounted.
     // No gross/net conversion, tax mapping, catalogue lookup or second discount.
-    const agreedUnit = line.pricing ? decimal(line.pricing.unitPrice) : div(decimal(line.total),decimal(line.quantity));
     if (line.pricing && cents(line.pricing.agreedTotal) !== cents(line.total)) throw new Error(`La asignación histórica de ${line.name} no coincide con su total acordado.`);
-    const unit = roundTo(agreedUnit,10 ** -precision.digits);
-    const lineCents = extendedCents(unit,line.quantity);
-    if (lineCents !== cents(line.total)) throw new Error(`El precio unitario acordado de ${line.name} no reproduce su total con ${precision.digits} decimales en Odoo. Revisá el ajuste histórico de esa línea; no se cambiará el importe pagado.`);
-    expectedCents += lineCents;
-    // Explicit zero-rate sales tax; catalogue prices need no gross/net conversion.
-    return [0,0,{product_id:product.id,name:line.name,product_uom_id:product.uom_id[0],product_uom_qty:line.quantity,price_unit:unit,discount:0,tax_ids:[[6,0,[taxPolicy.taxId]]]}];
+    return exportPriceParts(line,precision.digits).map(({quantity,unit}) => {
+      expectedCents += extendedCents(unit,quantity);
+      return [0,0,{product_id:product.id,name:line.name,product_uom_id:product.uom_id[0],product_uom_qty:quantity,price_unit:unit,discount:0,tax_ids:[[6,0,[taxPolicy.taxId]]]}];
+    });
   });
   if (expectedCents !== cents(s.total)) throw new Error('Las líneas no suman el total acordado del pedido. Revisá la asignación histórica; no se ajustarán precios ni totales.');
 

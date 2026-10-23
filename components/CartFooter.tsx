@@ -31,7 +31,7 @@ export function CartFooter() {
 
     setIsSaving(true);
     setError("");
-    const updatedOrderData = { items, subtotal, total, autoApplyPromos: items.some((item) => item.isPromo) };
+    const updatedOrderData = { checkoutCart: items, items, subtotal, total, autoApplyPromos: items.some((item) => item.isPromo) };
 
     try {
       const endpoint = editSellerSlug

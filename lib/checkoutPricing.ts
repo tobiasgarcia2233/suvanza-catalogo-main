@@ -3,6 +3,17 @@ import type { CartItem, Order, PricingAllocation } from '@/types';
 import { expandComboRows } from './comboRows';
 import { cents, extendedCents, decimal, div, mul, rounded } from './money';
 
+export function promotionComponentTotal(items: {quantity:number;pricePerUnit:number}[]) {
+  if (!items.length || items.some(i => !Number.isSafeInteger(i.quantity) || i.quantity <= 0 || !Number.isFinite(i.pricePerUnit) || i.pricePerUnit < 0)) throw new Error('Componentes de promoción inválidos.');
+  const total = items.reduce((sum,i) => sum + extendedCents(i.pricePerUnit,i.quantity),0);
+  if (!Number.isSafeInteger(total)) throw new Error('Importe fuera de rango.');
+  return total / 100;
+}
+
+export function promotionReviewMessage(p: {title:string;totalPrice:number;items:{quantity:number;pricePerUnit:number}[]}) {
+  try { validatePromotion(p); return null; } catch (error) { return error instanceof Error ? error.message : 'Promoción inválida.'; }
+}
+
 export function validatePromotion(p: {title:string;totalPrice:number;items:{quantity:number;pricePerUnit:number}[]}) {
   if (!p.items.length || p.items.some(i => !Number.isSafeInteger(i.quantity) || i.quantity <= 0 || !Number.isFinite(i.pricePerUnit) || i.pricePerUnit < 0) || !Number.isFinite(p.totalPrice) || p.totalPrice < 0 ||
     p.items.reduce((sum, i) => sum + extendedCents(i.pricePerUnit,i.quantity), 0) !== cents(p.totalPrice)) {
@@ -35,7 +46,7 @@ export function checkoutItems(items: CartItem[], total: number): Order['items'] 
       const lineTotal = next - allocated; allocated = next;
       const quantity = part.quantity * item.quantity;
       return {id:String(part.id),name:part.name,brand:part.brand ?? '',quantity,finalPrice:lineTotal/100,discountPercentage:0,
-        pricing:{version:2,kind:'promotion',comboSource:item.comboSource,promotionId:String(item.promoId ?? item.id),allocationId:`${index}`,repetitions:item.quantity,quantityPerPromotion:part.quantity,
+        pricing:{version:2,kind:'promotion',comboSource:item.comboSource,promotionId:String(item.promoId ?? item.id),promotionName:item.name,allocationId:`${index}`,repetitions:item.quantity,quantityPerPromotion:part.quantity,
           configuredUnitPrice:part.promotionUnitPrice!,promotionTotal:item.promotionTotal!,unitPrice:lineTotal/100/quantity,agreedTotal:lineTotal/100,
           adjustment:{manualPricePerUnit:item.manualPricePerUnit,manualPercentage:item.manualPercentage,manualTotal:item.manualTotal}}};
     });
