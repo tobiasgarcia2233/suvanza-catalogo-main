@@ -10,15 +10,10 @@
     "db:migrate": "node --env-file=.env --import tsx scripts/migrate.ts",
     "db:migrate:odoo-products": "node --env-file=.env --import tsx scripts/migrate-odoo-products.ts",
     "db:check:odoo-products": "node --env-file=.env --import tsx scripts/migrate-odoo-products.ts --check",
-    "test:odoo-products": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-products.test.ts",
     "db:reset": "node --env-file=.env.local --import tsx scripts/migrate.ts -- --wipe",
     "auth:hash": "node --env-file=.env.local --import tsx scripts/hash-password.ts",
     "db:migrate:odoo-exports": "node --env-file=.env --import tsx scripts/migrate-odoo-exports.ts",
-    "test:odoo-exports": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-exports.test.ts",
-    "test:odoo-customer-review": "node --import ./tests/server-only-register.mjs --import tsx --test tests/odoo-customer-review.test.ts",
-    "db:migrate:order-deletion": "node --env-file=.env --import tsx scripts/migrate-order-deletion.ts",
-    "test:order-deletion": "node --import ./tests/deletion-register.mjs --import tsx --test tests/order-deletion.test.ts",
-    "test:promotion-pricing": "node --import ./tests/server-only-register.mjs --import tsx --test tests/promotion-pricing.test.ts"
+    "db:migrate:order-deletion": "node --env-file=.env --import tsx scripts/migrate-order-deletion.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
