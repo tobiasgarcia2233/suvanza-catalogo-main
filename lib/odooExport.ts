@@ -1,5 +1,6 @@
 import 'server-only';
 import { cents } from './money';
+import { validateSalesTax, type SalesTaxPolicy } from './odooTaxPolicy';
 import { needsPricingRepair, assessPricingRecovery, PRICING_REVIEW, type PricingRepair } from './odooPricingRepair';
 import type { Client } from '@libsql/client';
 import { db } from './db';
@@ -83,6 +84,8 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
     }
     owned = true;
     state = (await client.execute({sql:'SELECT * FROM odoo_exports WHERE order_id = ?',args:[orderId]})).rows[0];
+    // Exact history from before backfill, customer resolution or payload rebuilding.
+    const taxHistory = {originalSnapshot:String(state.snapshot),originalPayload:state.payload == null ? null : String(state.payload),originalPricingData:state.pricing_data == null ? null : String(state.pricing_data)};
     const wasReview = state.status === 'review';
     const repair: PricingRepair | null = state.pricing_data ? JSON.parse(state.pricing_data) : null;
     const s: ExportSnapshot = repair ? structuredClone(repair.snapshot) : JSON.parse(state.snapshot);
@@ -201,6 +204,7 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
       await save({status:'review',error:'Pedido eliminado: no se encontró un presupuesto existente. No se crearán nuevos registros en Odoo.'});
       return await getExport(orderId,client);
     }
+    let validatedTax: SalesTaxPolicy | undefined;
     if (!quotation) {
       const historicalPromos = row.promos_sold ? JSON.parse(String(row.promos_sold)) : null;
       if (needsPricingRepair({promos_sold:historicalPromos,autoApplyPromos:!!row.auto_apply_promos},s)) {
@@ -209,6 +213,8 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
       }
       commercialLines({total:s.total,items:s.lines.map(l=>({id:l.variantId,name:l.name,brand:"",quantity:l.quantity,finalPrice:l.total,discountPercentage:0}))});
       await validateConfig(call,s);
+      // Reject invalid tax configuration before resolving/creating any customer.
+      validatedTax = await validateSalesTax(call,s.taxPolicy);
     }
     if (!quotation && !state.partner_id) {
       const matches = await customers(call,s); // Failure must propagate, never converted to [].
@@ -255,6 +261,16 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
       return await getExport(orderId,client);
     }
     if (!quotation) {
+      // Reconciliation above established safe creation. Customer creation, if it
+      // was uncertain, has also been resolved. This is independent of the old
+      // missing-config backfill: resolved customers/prepared payloads qualify too.
+      if (!s.taxPolicy) {
+        if (!validatedTax) throw new Error('No se pudo validar el IVA 0% del presupuesto.');
+        s.taxPolicy = validatedTax;
+        s.taxPolicyAdoption = {version:1,at:new Date().toISOString(),actor:'system:odoo_export',source:'configured_zero_sales_tax',...taxHistory};
+        const taxSnapshot = repair ? {pricing_data:JSON.stringify({...repair,snapshot:s})} : {snapshot:JSON.stringify(s)};
+        await save({...taxSnapshot,payload:null});
+      }
       const comparison = await compareCustomer(call,s,Number(state.partner_id),customer.revision);
       const mismatch = Object.values(comparison.differences).some(Boolean) || !comparison.canApprove;
       const staleApproval = action?.kind === 'approve' && (action.token !== comparison.token || action.partnerId !== comparison.remote.id);

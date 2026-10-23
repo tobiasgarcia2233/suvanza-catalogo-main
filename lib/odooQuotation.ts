@@ -3,11 +3,16 @@ import { cents, decimal, div, roundTo, extendedCents } from './money';
 import { odooCall } from './odooClient';
 import { commercialLines, normalizeDni } from './odooExportValues';
 import { missingOdooProductMessage } from './odooExportStatus';
+import { validateSalesTax, type SalesTaxPolicy, type SalesTaxAdoption } from './odooTaxPolicy';
 // JSON-2 records have dynamic fields, checked at their usage boundary.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RecordData = Record<string, any>;
 export type Call = typeof odooCall;
 export type ExportSnapshot = {
+  // Purchase prices are captured locally first; export validates and persists this
+  // policy before any quotation creation, without coupling payment to Odoo uptime.
+  taxPolicy?: SalesTaxPolicy;
+  taxPolicyAdoption?: SalesTaxAdoption;
   reference: string; total: number; buyer: { name: string; dni: string; phone: string };
   lines: { variantId: string; name: string; quantity: number; total: number; productId: number | null; pricing?: import("@/types").PricingAllocation }[];
   config: { dniType: number; responsibility: number; country: number; currency: number; pricelist: number; priceBasis: string };
@@ -42,6 +47,8 @@ export async function validateConfig(call: Call, s: ExportSnapshot) {
 }
 
 export async function quotationPayload(call: Call, s: ExportSnapshot, partnerId: number) {
+  if (!s.taxPolicy) throw new Error('Falta la política de IVA 0% validada en el snapshot. Reintentá la exportación para validarla antes de crear el presupuesto.');
+  const taxPolicy = await validateSalesTax(call,s.taxPolicy);
   commercialLines({total:s.total,items:s.lines.map(l=>({id:l.variantId,name:l.name,brand:'',quantity:l.quantity,finalPrice:l.total,discountPercentage:0}))});
   const [company] = await search(call,'res.company',[['id','=',1]],['currency_id']);
   const [pricelist] = await search(call,'product.pricelist',[['id','=',s.config.pricelist]],['currency_id','company_id']);
@@ -55,7 +62,7 @@ export async function quotationPayload(call: Call, s: ExportSnapshot, partnerId:
   const [precision] = await search(call,'decimal.precision',[['name','=','Product Price']],['digits']);
   if (!Number.isInteger(precision?.digits) || precision.digits < 0 || precision.digits > 8) throw new Error('No se pudo verificar la precisión del precio Odoo.');
   let expectedCents = 0;
-  const orderLines = s.lines.map(line => {
+  const orderLines = s.lines.map((line): [number,number,RecordData] => {
     const product = products.find(p => p.id === line.productId);
     if (!product?.uom_id) throw new Error(`La variante ${line.name} tiene un vínculo Odoo inválido/inactivo o de otra empresa.`);
     // The snapshot contains the final catalogue price, already discounted.
@@ -66,8 +73,8 @@ export async function quotationPayload(call: Call, s: ExportSnapshot, partnerId:
     const lineCents = extendedCents(unit,line.quantity);
     if (lineCents !== cents(line.total)) throw new Error(`El precio unitario acordado de ${line.name} no reproduce su total con ${precision.digits} decimales en Odoo. Revisá el ajuste histórico de esa línea; no se cambiará el importe pagado.`);
     expectedCents += lineCents;
-    // Explicitly clear taxes so Odoo defaults cannot add IVA to catalogue prices.
-    return [0,0,{product_id:product.id,name:line.name,product_uom_id:product.uom_id[0],product_uom_qty:line.quantity,price_unit:unit,discount:0,tax_ids:[[6,0,[]]]}];
+    // Explicit zero-rate sales tax; catalogue prices need no gross/net conversion.
+    return [0,0,{product_id:product.id,name:line.name,product_uom_id:product.uom_id[0],product_uom_qty:line.quantity,price_unit:unit,discount:0,tax_ids:[[6,0,[taxPolicy.taxId]]]}];
   });
   if (expectedCents !== cents(s.total)) throw new Error('Las líneas no suman el total acordado del pedido. Revisá la asignación histórica; no se ajustarán precios ni totales.');
 
