@@ -343,8 +343,8 @@ export default function ProductForm({
                 <button type="button" disabled={busy || i === state.variants.length - 1} className="underline disabled:opacity-40"
                   onClick={() => setState((s) => ({ ...s, variants: moveVariant(s.variants, v.formKey, 1) }))}>Bajar variante</button>
               </div>
-              <div className="rounded border border-gray-200 p-3 flex flex-col gap-3">
-                <h3 className="font-semibold text-sm">Vínculo con Odoo (opcional)</h3>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xs text-gray-600">Vínculo con Odoo (opcional)</h3>
                 <OdooProductSelector value={v.odooProductId ?? null}
                   onChange={(id) => updateVariant(v.formKey, { odooProductId: id })} disabled={busy} />
                 {product?.legacyOdooProductId != null && (

@@ -1,6 +1,6 @@
 import "server-only";
-import { ODOO_COMPANY_ID, OdooError, odooSearchRead } from "./odooClient";
-import type { OdooProduct } from "@/types";
+import { ODOO_COMPANY_ID, OdooError, odooCall, odooSearchRead } from "./odooClient";
+import type { OdooLinkCheck, OdooProduct, OdooProductDetails } from "@/types";
 
 const conditions = () => [
   "|",
@@ -41,6 +41,55 @@ export async function getOdooProduct(id: number): Promise<OdooProduct> {
   const product = records.find((record) => record.id === id);
   if (!product) throw new OdooError("El producto ya no existe en Odoo o no está activo, habilitado para ventas y disponible para SUVANZA o visible para todos. Elegí otro producto o quitá el vínculo.", 422);
   return product;
+}
+
+const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+const many2one = (value: unknown) =>
+  Array.isArray(value) && Number.isSafeInteger(value[0]) && typeof value[1] === "string" ? { id: value[0] as number, name: value[1] as string } : null;
+
+/**
+ * Display only, never used to accept a link. Reads the variant without the
+ * export's filters so the form can say which requirement fails. Keep the checks
+ * in sync with the product search in quotationPayload (lib/odooQuotation.ts).
+ */
+export async function getOdooProductDetails(id: number): Promise<OdooProductDetails> {
+  parseOdooProductId(id);
+  let rows: unknown;
+  try {
+    rows = await odooCall("product.product", "search_read", {
+      domain: [["id", "=", id], ["active", "in", [true, false]]],
+      fields: ["name", "company_id", "active", "sale_ok", "uom_id", "product_tmpl_id", "default_code", "barcode"],
+      limit: 1,
+    });
+  } catch {
+    throw new OdooError("No se pudo consultar el producto en Odoo. Intentá nuevamente.");
+  }
+  if (!Array.isArray(rows) || rows.length > 1) throw new OdooError("Odoo devolvió una respuesta inválida. Intentá nuevamente.");
+  const row = rows[0];
+  if (!row) {
+    return {
+      id, found: false, name: null, companyName: null, templateId: null, defaultCode: null, barcode: null, uomName: null, exportable: false,
+      checks: [{ key: "found", label: "Existe como variante en Odoo", ok: false,
+        hint: "No se encontró este ID como variante (product.product) accesible desde SUVANZA. Revisá que no sea el ID de la plantilla o de un producto de otra empresa." }],
+    };
+  }
+  if (row.id !== id || typeof row.name !== "string") throw new OdooError("Odoo devolvió una respuesta inválida. Intentá nuevamente.");
+  const company = many2one(row.company_id);
+  const uom = many2one(row.uom_id);
+  const checks: OdooLinkCheck[] = [
+    { key: "found", label: "Existe como variante en Odoo", ok: true, hint: "" },
+    { key: "company", label: "Empresa SUVANZA", ok: company?.id === ODOO_COMPANY_ID,
+      hint: company ? `Pertenece a ${company.name}. Elegí un producto de SUVANZA.` : "Tiene la empresa vacía (visible para todos). La exportación solo acepta productos de SUVANZA: asignale la empresa en Odoo." },
+    { key: "active", label: "Activo", ok: row.active === true, hint: "Está archivado en Odoo. Desarchivalo o elegí otro producto." },
+    { key: "sale_ok", label: "Puede venderse", ok: row.sale_ok === true, hint: "Tildá “Puede ser vendido” en el producto en Odoo." },
+    { key: "uom", label: "Unidad de medida", ok: !!uom, hint: "No tiene unidad de medida asignada en Odoo." },
+  ];
+  return {
+    id, found: true, name: row.name, companyName: company?.name ?? null,
+    templateId: many2one(row.product_tmpl_id)?.id ?? null,
+    defaultCode: text(row.default_code), barcode: text(row.barcode), uomName: uom?.name ?? null,
+    checks, exportable: checks.every((check) => check.ok),
+  };
 }
 
 export async function validateOdooLink(value: unknown, previous: number | null): Promise<number | null> {

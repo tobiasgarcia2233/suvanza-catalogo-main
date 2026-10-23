@@ -38,6 +38,30 @@ export interface OdooProduct {
   companyName: string;
 }
 
+/** One requirement the export checks on a linked product (see lib/odooQuotation.ts). */
+export interface OdooLinkCheck {
+  key: "found" | "company" | "active" | "sale_ok" | "uom";
+  label: string;
+  ok: boolean;
+  /** What to fix in Odoo when it fails. */
+  hint: string;
+}
+
+/** Read-only view of a linked variant, including the ones the export would reject. */
+export interface OdooProductDetails {
+  id: number;
+  found: boolean;
+  name: string | null;
+  /** null when the company is empty ("Visible para todos"). */
+  companyName: string | null;
+  templateId: number | null;
+  defaultCode: string | null;
+  barcode: string | null;
+  uomName: string | null;
+  checks: OdooLinkCheck[];
+  exportable: boolean;
+}
+
 export interface PricingAllocation {
   version: 2;
   kind: 'promotion' | 'extra';

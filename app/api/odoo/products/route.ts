@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSessionFromCookie } from "@/lib/auth";
 import { OdooError } from "@/lib/odooClient";
-import { getOdooProduct, searchOdooProducts } from "@/lib/odooQueries";
+import { getOdooProductDetails, searchOdooProducts } from "@/lib/odooQueries";
 
 export async function GET(request: Request) {
   if (!(await readSessionFromCookie())) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
@@ -11,7 +11,8 @@ export async function GET(request: Request) {
     if (params.has("id")) {
       const raw = params.get("id")!;
       if (!/^[1-9]\d*$/.test(raw)) throw new OdooError("ID de Odoo inválido.", 400);
-      return NextResponse.json({ product: await getOdooProduct(Number(raw)) }, { headers });
+      // Display only: saving a link still goes through validateOdooLink.
+      return NextResponse.json({ details: await getOdooProductDetails(Number(raw)) }, { headers });
     }
     return NextResponse.json({ products: await searchOdooProducts(params.get("q") ?? "") }, { headers });
   } catch (error) {
