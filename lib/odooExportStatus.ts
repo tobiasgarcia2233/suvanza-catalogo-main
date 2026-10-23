@@ -30,9 +30,16 @@ export function exportErrorDetail(progress: ExportProgress | null) {
   return progress?.error ?? '';
 }
 
+/** Unfinished exports the operator may close by hand after handling them in Odoo. */
+export const MANUAL_RESOLVABLE_STATUSES = ['pending', 'error', 'review', 'pricing_review', 'customer_review', 'customer_selection'];
+
+export function canResolveManually(progress: ExportProgress | null) {
+  return !!progress && !progress.migration_required && MANUAL_RESOLVABLE_STATUSES.includes(progress.status);
+}
+
 /** A missing/unreadable status never authorizes creation. */
 export function exportAction(progress: ExportProgress | null, readFailed = false) {
-  if (!progress || readFailed || progress.migration_required || ['exported', 'legacy_sent', 'processing'].includes(progress.status)) return null;
+  if (!progress || readFailed || progress.migration_required || ['exported', 'legacy_sent', 'manual_resolved', 'processing'].includes(progress.status)) return null;
   if (progress.quotation_id || progress.phase?.endsWith('creating') || progress.status === 'review') return 'reconcile';
   if (needsHistoricalPricingReview(progress)) return canRecoverPricingOnRetry(progress) ? 'retry' : null;
   if (progress.status === 'pending' || progress.status === 'error') return 'retry';

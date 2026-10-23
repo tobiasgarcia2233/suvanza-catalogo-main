@@ -5,7 +5,7 @@ import { AlertTriangle, Check, CheckCircle2, Info, Loader2, Lock, RefreshCw, X, 
 import { usePauseRefresh } from "@/store/refreshGuardStore";
 import { CUSTOMER_REVIEW_MESSAGE, type BuyerData, type CustomerComparison, type PartnerUpdateField } from "@/lib/customerReview";
 import type { ExportProgress } from "@/lib/odooExport";
-import { displayExportError, EXPORT_MIGRATION_MESSAGE, canRecoverPricingOnRetry, exportErrorDetail, canRecompareCustomer } from "@/lib/odooExportStatus";
+import { displayExportError, EXPORT_MIGRATION_MESSAGE, canRecoverPricingOnRetry, exportErrorDetail, canRecompareCustomer, canResolveManually } from "@/lib/odooExportStatus";
 import { useOdooExport } from "./useOdooExport";
 import { OdooPartnerLink } from "./OdooPartnerLink";
 
@@ -35,6 +35,8 @@ function exportSummary(progress: ExportProgress | null): { tone: Tone; title: st
       return { tone: "success", title: "Enviado a Odoo", text: "El presupuesto se creó en Odoo." };
     case "legacy_sent":
       return { tone: "success", title: "Registrado en Odoo", text: "Este pedido se cargó en Odoo antes del envío automático. No se vuelve a enviar." };
+    case "manual_resolved":
+      return { tone: "success", title: "Resuelto manualmente", text: "Se marcó como resuelto a mano en Odoo. No se vuelve a enviar." };
     case "customer_review":
       return { tone: "warning", title: "Los datos del cliente no coinciden", text: "Ya existe en Odoo un cliente con este DNI, pero algunos datos son distintos. Elegí con qué dato quedarte en cada fila." };
     case "customer_selection":
@@ -103,11 +105,13 @@ function OdooPanel({ orderId, onChanged }: { orderId: string; onChanged: () => v
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<BuyerData>({ name: "", dni: "", phone: "" });
   const [formRevision, setFormRevision] = useState(0);
+  const [confirmingManual, setConfirmingManual] = useState(false);
 
   async function send(body: Record<string, unknown> = {}) {
     const result = await post(body);
     if (!result) return;
     onChanged();
+    if (body.action === "resolve_manually") setConfirmingManual(false);
     if (body.action === "correct" && result.next?.customer_revision !== formRevision) setEditing(false);
     return result;
   }
@@ -235,7 +239,31 @@ function OdooPanel({ orderId, onChanged }: { orderId: string; onChanged: () => v
       )}
 
       {/* Secondary ways out, deliberately quieter than the main action. */}
-      {(canCorrect || review || canRecompareCustomer(progress)) && (
+      {confirmingManual && canResolveManually(progress) && (
+        <div className="space-y-2 rounded-lg border border-orange-200 bg-orange-50 p-3 text-orange-900">
+          <p className="font-semibold">¿Marcar como resuelto manualmente?</p>
+          <p>
+            Usalo solo si el pedido ya se cargó a mano en Odoo. Desde el catálogo no se va a volver a enviar ni se crea
+            nada en Odoo. El motivo actual queda guardado en el registro.
+          </p>
+          {progress?.status === "review" && (
+            <p className="font-medium">
+              Puede que el presupuesto ya exista en Odoo. Verificalo antes de cargarlo a mano, así no se duplica.
+            </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button className={secondaryButton} disabled={busy} onClick={() => setConfirmingManual(false)}>
+              Cancelar
+            </button>
+            <button className={primaryButton} disabled={blocked} onClick={() => void send({ action: "resolve_manually" })}>
+              {busy && <Loader2 size={14} className="animate-spin" />}
+              Marcar como resuelto
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(canCorrect || review || canRecompareCustomer(progress) || canResolveManually(progress)) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {canCorrect && !review && (
             <button className={linkButton} disabled={blocked} onClick={startCorrection}>
@@ -250,6 +278,11 @@ function OdooPanel({ orderId, onChanged }: { orderId: string; onChanged: () => v
           {review && (
             <button className={linkButton} disabled={blocked} onClick={() => send({ action: "defer", revision: review.revision })}>
               Resolver más tarde
+            </button>
+          )}
+          {canResolveManually(progress) && !confirmingManual && (
+            <button className={linkButton} disabled={blocked} onClick={() => setConfirmingManual(true)}>
+              Resolver manualmente
             </button>
           )}
         </div>

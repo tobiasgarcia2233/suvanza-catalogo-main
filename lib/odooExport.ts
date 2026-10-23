@@ -5,7 +5,7 @@ import { needsPricingRepair, assessPricingRecovery, PRICING_REVIEW, type Pricing
 import type { Client } from '@libsql/client';
 import { db } from './db';
 import { isOrderDeleted, requireActiveOrder, OrderActionError } from './orderDeletion';
-import { EXPORT_MIGRATION_MESSAGE, needsHistoricalPricingReview } from './odooExportStatus';
+import { EXPORT_MIGRATION_MESSAGE, MANUAL_RESOLVABLE_STATUSES, needsHistoricalPricingReview } from './odooExportStatus';
 import { odooCall, OdooError } from './odooClient';
 import { commercialLines, normalizeDni } from './odooExportValues';
 import { customers, customerPayload, quotationPayload, search, validateConfig, type Call, type ExportSnapshot, type RecordData } from './odooQuotation';
@@ -36,6 +36,23 @@ export async function getExport(orderId: string, client = db): Promise<ExportPro
     pricingReview=assessPricingRecovery(snapshot,purchase);
   }
   return row ? {pricing_review:pricingReview,pricing_repaired:!!row.pricing_data,migration_required:!Object.hasOwn(row,'customer_data'), customer_revision:customer.revision, customer_review:customer.review, customer_buyer:customer.buyer ?? original, original_buyer:original, created_customers:customer.created, status:pricingReview?'pricing_review':String(row.status),partner_id:row.partner_id ? Number(row.partner_id) : null,quotation_id:row.quotation_id ? Number(row.quotation_id) : null,quotation_ref:row.quotation_ref ? String(row.quotation_ref) : null,error:pricingReview?.message ?? (row.error ? String(row.error) : null),phase:String(row.phase),candidates:row.candidates ? JSON.parse(String(row.candidates)) : []} : null;
+}
+/** The operator handled the order in Odoo by hand: the export stops for good.
+ * Compare-and-set on status and a free lease, so it never races a running export.
+ * Nothing is read from or written to Odoo; the previous reason is kept in the note.
+ */
+export async function resolveManually(orderId: string, actor: string, client: Client = db) {
+  if (!actor.trim()) throw new OrderActionError('Se requiere un operador autenticado para resolver a mano.');
+  await requireActiveOrder(orderId,client);
+  const row = (await client.execute({sql:'SELECT status, error FROM odoo_exports WHERE order_id = ?',args:[orderId]})).rows[0];
+  if (!row) throw new OrderActionError('Pedido sin exportación automática; conserva su gestión manual.');
+  const status = String(row.status);
+  if (!MANUAL_RESOLVABLE_STATUSES.includes(status)) throw new OrderActionError('Este pedido no tiene un envío pendiente para resolver a mano.');
+  const at = new Date().toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires'});
+  const note = `Resuelto manualmente por ${actor} el ${at}.${row.error ? ` Motivo anterior: ${String(row.error)}` : ''}`;
+  const updated = await client.execute({sql:"UPDATE odoo_exports SET status = 'manual_resolved', error = ?, candidates = NULL, updated_at = CURRENT_TIMESTAMP WHERE order_id = ? AND status = ? AND locked_until < ? AND NOT EXISTS (SELECT 1 FROM order_deletions WHERE order_deletions.order_id = odoo_exports.order_id)",args:[note,orderId,status,Date.now()]});
+  if (updated.rowsAffected !== 1) throw new OrderActionError('La exportación está en curso o cambió. Actualizá el estado y volvé a intentar.');
+  return getExport(orderId,client);
 }
 /** Persistent lease + write-ahead phases, not search-then-create uniqueness. */
 export async function exportPaidOrder(orderId: string, selectedPartner?: number, client: Client = db, call: Call = odooCall, action?: CustomerReviewAction, reconcileDeleted = false) {
@@ -77,7 +94,7 @@ export async function exportPaidOrder(orderId: string, selectedPartner?: number,
       const snapshot = await snapshotOrder(client,order);
       await client.execute({sql:'INSERT OR IGNORE INTO odoo_exports (order_id,snapshot) SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM order_deletions WHERE order_id = ?)',args:[orderId,JSON.stringify(snapshot),orderId]});
     }
-    const claim = await client.execute({sql:"UPDATE odoo_exports SET lock_token = ?, locked_until = ? WHERE order_id = ? AND locked_until < ? AND status != 'exported' AND (? OR NOT EXISTS (SELECT 1 FROM order_deletions WHERE order_deletions.order_id = odoo_exports.order_id))",args:[token,lease(),orderId,Date.now(),reconcileDeleted ? 1 : 0]});
+    const claim = await client.execute({sql:"UPDATE odoo_exports SET lock_token = ?, locked_until = ? WHERE order_id = ? AND locked_until < ? AND status NOT IN ('exported','manual_resolved') AND (? OR NOT EXISTS (SELECT 1 FROM order_deletions WHERE order_deletions.order_id = odoo_exports.order_id))",args:[token,lease(),orderId,Date.now(),reconcileDeleted ? 1 : 0]});
     if (!claim.rowsAffected) {
       const progress = await getExport(orderId,client);
       return action && progress?.quotation_id ? {...progress,error:'Ya existe un presupuesto. Sus datos requieren revisión separada en Odoo.'} : progress;

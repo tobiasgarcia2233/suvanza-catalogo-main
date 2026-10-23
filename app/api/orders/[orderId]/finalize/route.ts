@@ -3,7 +3,7 @@ import { repairPricing } from '@/lib/odooPricingRepair';
 import { isOrderDeleted, OrderActionError } from '@/lib/orderDeletion';
 import { NextResponse } from 'next/server';
 import { readSessionFromCookie } from '@/lib/auth';
-import { exportPaidOrder, getExport } from '@/lib/odooExport';
+import { exportPaidOrder, getExport, resolveManually } from '@/lib/odooExport';
 import { EXPORT_MIGRATION_MESSAGE } from '@/lib/odooExportStatus';
 import { PARTNER_UPDATE_FIELDS, type CustomerReviewAction, type PartnerUpdateField } from '@/lib/customerReview';
 export async function GET(_request: Request, context: { params: Promise<{orderId:string}> }) {
@@ -34,6 +34,13 @@ export async function POST(request: Request, context: { params: Promise<{orderId
       return NextResponse.json({export:await exportPaidOrder(orderId,undefined,undefined,undefined,undefined,true)});
     } catch (error) {
       return NextResponse.json({message:error instanceof OrderActionError ? error.message : 'No se pudo conciliar el pedido eliminado.'},{status:error instanceof OrderActionError ? error.status : 503});
+    }
+  }
+  if (body.action === 'resolve_manually') {
+    try {
+      return NextResponse.json({export:await resolveManually(orderId,session.sub)});
+    } catch (error) {
+      return NextResponse.json({message:error instanceof OrderActionError ? error.message : 'No se pudo marcar como resuelto.'},{status:error instanceof OrderActionError ? error.status : 503});
     }
   }
   if (body.action === 'repair_pricing') {

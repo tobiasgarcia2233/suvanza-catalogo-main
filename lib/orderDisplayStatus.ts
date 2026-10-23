@@ -8,6 +8,7 @@ export type OrderDisplayStatus =
   | "odoo_pending"
   | "odoo_processing"
   | "odoo_sent"
+  | "odoo_manual"
   | "odoo_review"
   | "odoo_error";
 
@@ -19,6 +20,8 @@ export function orderDisplayStatus(paid: boolean, exportStatus: string | null | 
     case "exported":
     case "legacy_sent":
       return "odoo_sent";
+    case "manual_resolved":
+      return "odoo_manual";
     case "review":
     case "pricing_review":
     case "customer_review":
@@ -44,6 +47,7 @@ export const DISPLAY_STATUS_META: Record<
   odoo_pending: { label: "Por enviar a Odoo", badge: "bg-yellow-100 text-yellow-800", dot: "bg-yellow-500", attention: false },
   odoo_processing: { label: "Odoo enviando", badge: "bg-sky-100 text-sky-800", dot: "bg-sky-500", attention: false },
   odoo_sent: { label: "Odoo enviado", badge: "bg-green-700 text-white", dot: "bg-green-700", attention: false },
+  odoo_manual: { label: "Odoo manual", badge: "bg-green-100 text-green-800", dot: "bg-green-700", attention: false },
   odoo_review: { label: "Odoo revisión", badge: "bg-orange-100 text-orange-800", dot: "bg-orange-500", attention: true },
   odoo_error: { label: "Odoo error", badge: "bg-red-100 text-red-800", dot: "bg-red-500", attention: true },
 };
